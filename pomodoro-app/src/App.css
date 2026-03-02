@@ -1,0 +1,175 @@
+.app-container {
+  min-height: 100vh;
+  width: 100vw;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background-color: #1a1a1a;
+  background-image: 
+    linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.6)),
+    url('https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?q=80&w=2000&auto=format&fit=crop');
+  background-size: cover;
+  background-position: center;
+  background-repeat: repeat;
+  color: white;
+  position: relative;
+}
+
+.app-logo {
+  position: absolute;
+  top: 3rem;
+  left: 50%;
+  transform: translateX(-50%);
+  height: 96px;
+  width: auto;
+  z-index: 50;
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.8)) brightness(1.2) contrast(1.1);
+}
+
+.start-btn {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+  font-size: 1.5rem !important;
+  font-weight: 600 !important;
+  padding: 0.5rem 2.5rem !important;
+  border-radius: 9999px !important;
+  border: 2px solid #ffffff !important;
+  cursor: pointer;
+  font-family: 'Space Grotesk', sans-serif !important;
+  text-transform: lowercase !important;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important;
+  transition: all 0.3s ease !important;
+}
+
+.start-btn:hover {
+  background-color: transparent !important;
+  color: #ffffff !important;
+  border: 2px solid #ffffff !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 6px 12px rgba(0,0,0,0.15) !important;
+}
+
+.start-btn:active {
+  transform: translateY(0) scale(0.95) !important;
+}
+
+@keyframes rotate-once {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.reset-icon.spinning {
+  animation: rotate-once 0.6s cubic-bezier(0.2, 1, 0.3, 1);
+}
+
+.settings-input input {
+  background-color: #f2f2f2 !important;
+  border: none !important;
+  border-radius: 6px !important;
+  padding: 0.75rem 1rem !important;
+  font-family: 'Space Grotesk', sans-serif !important;
+  font-size: 1rem !important;
+  font-weight: 500 !important;
+  color: #333 !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.settings-input input:focus {
+  outline: 2px solid #bdbdbd !important;
+}
+
+/* Hide number spin buttons */
+.settings-input input::-webkit-outer-spin-button,
+.settings-input input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.settings-input input[type=number] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* Custom Toggle Switch */
+.custom-switch {
+  position: relative;
+  display: inline-block;
+  width: 50px;
+  height: 28px;
+}
+
+.custom-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.custom-switch .slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #d8d8d8;
+  transition: 0.3s;
+  border-radius: 34px;
+}
+
+.custom-switch .slider:before {
+  position: absolute;
+  content: "";
+  height: 22px;
+  width: 22px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: 0.3s;
+  border-radius: 50%;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.custom-switch input:checked + .slider {
+  background-color: #8bc34a;
+}
+
+.custom-switch input:checked + .slider:before {
+  transform: translateX(22px);
+}
+
+.modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background-color: white;
+  color: #333;
+  width: 90%;
+  max-width: 400px;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+/* Reset any vite root margins */
+#root {
+  margin: 0;
+  padding: 0;
+  max-width: 100%;
+}
