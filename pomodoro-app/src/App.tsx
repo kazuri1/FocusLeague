@@ -30,42 +30,55 @@ function App() {
 
   const [timeLeft, setTimeLeft] = useState<number>(getModeTimeSeconds('pomodoro', defaultSettings));
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
+  const [pomodorosCompleted, setPomodorosCompleted] = useState<number>(0);
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
-    if (isPlaying && timeLeft > 0) {
+    if (isPlaying) {
       interval = setInterval(() => {
         setTimeLeft((prev) => {
-          if (prev <= 1) {
-            clearInterval(interval);
-            setIsPlaying(false);
-            
-            // Play notification sound repeatedly for 2 seconds
-            const audio = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
-            audio.loop = true;
-            audio.play().catch(e => console.error("Error playing sound:", e));
-            
-            setTimeout(() => {
-                audio.pause();
-                audio.currentTime = 0;
-            }, 2000);
-
-            // If a break just finished, switch back to Pomodoro
-            if (mode === 'short break' || mode === 'long break') {
-                setMode('pomodoro');
-                return getModeTimeSeconds('pomodoro', settings);
-            }
-
-            // If auto-start breaks is enabled (could be added later based on settings.autoStartBreaks)
-            // For now, it just resets the current mode's time if we are not switching modes.
-            return getModeTimeSeconds(mode, settings);
-          }
+          if (prev <= 0) return 0;
           return prev - 1;
         });
       }, 1000);
     }
     return () => clearInterval(interval);
-  }, [isPlaying, timeLeft, mode, settings]);
+  }, [isPlaying]);
+
+  useEffect(() => {
+    if (isPlaying && timeLeft === 0) {
+      const audio = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
+      audio.loop = true;
+      audio.play().catch(e => console.error("Error playing sound:", e));
+      
+      setTimeout(() => {
+          audio.pause();
+          audio.currentTime = 0;
+      }, 2000);
+
+      let nextMode: Mode = 'pomodoro';
+      let nextPlaying = false;
+
+      if (mode === 'pomodoro') {
+          const newCount = pomodorosCompleted + 1;
+          if (newCount >= settings.longBreakInterval) {
+              nextMode = 'long break';
+              setPomodorosCompleted(0);
+          } else {
+              nextMode = 'short break';
+              setPomodorosCompleted(newCount);
+          }
+          nextPlaying = settings.autoStartBreaks;
+      } else {
+          nextMode = 'pomodoro';
+          nextPlaying = settings.autoStartPomodoros;
+      }
+
+      setMode(nextMode);
+      setTimeLeft(getModeTimeSeconds(nextMode, settings));
+      setIsPlaying(nextPlaying);
+    }
+  }, [timeLeft, isPlaying, mode, settings, pomodorosCompleted]);
 
   const handleModeChange = (newMode: Mode) => {
     setMode(newMode);
