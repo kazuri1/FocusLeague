@@ -1,6 +1,7 @@
 import { TextInput } from 'pulseui-base';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import CloseIcon from '@mui/icons-material/Close';
+import { useState, useEffect } from 'react';
 
 export interface TimerSettings {
     pomodoro: number;
@@ -25,11 +26,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     onSettingsChange 
 }) => {
     
+    // Hold local settings to prevent immediate updates to main timer
+    const [localSettings, setLocalSettings] = useState<TimerSettings>(settings);
+
+    // reset local changes on open event if unsaved matching globals
+    useEffect(() => {
+        if (isOpen) setLocalSettings(settings);
+    }, [isOpen, settings]);
+
     const handleChange = (key: keyof TimerSettings, value: number | boolean) => {
-        onSettingsChange({
-            ...settings,
+        setLocalSettings(prev => ({
+            ...prev,
             [key]: value
-        });
+        }));
+    };
+
+    const handleSave = () => {
+        onSettingsChange(localSettings);
+        onClose();
     };
 
     if (!isOpen) return null;
@@ -62,7 +76,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             <div className="settings-input">
                                 <TextInput 
                                     type="number" 
-                                    value={settings.pomodoro.toString()} 
+                                    value={localSettings.pomodoro.toString()} 
                                     onChange={(val) => handleChange('pomodoro', parseInt(val) || 0)}
                                 />
                             </div>
@@ -72,7 +86,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             <div className="settings-input">
                                 <TextInput 
                                     type="number" 
-                                    value={settings.shortBreak.toString()} 
+                                    value={localSettings.shortBreak.toString()} 
                                     onChange={(val) => handleChange('shortBreak', parseInt(val) || 0)}
                                 />
                             </div>
@@ -82,7 +96,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             <div className="settings-input">
                                 <TextInput 
                                     type="number" 
-                                    value={settings.longBreak.toString()} 
+                                    value={localSettings.longBreak.toString()} 
                                     onChange={(val) => handleChange('longBreak', parseInt(val) || 0)}
                                 />
                             </div>
@@ -94,7 +108,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         <label className="custom-switch">
                             <input 
                                 type="checkbox"
-                                checked={settings.autoStartBreaks} 
+                                checked={localSettings.autoStartBreaks} 
                                 onChange={(e) => handleChange('autoStartBreaks', e.target.checked)} 
                             />
                             <span className="slider"></span>
@@ -106,7 +120,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         <label className="custom-switch">
                             <input 
                                 type="checkbox"
-                                checked={settings.autoStartPomodoros} 
+                                checked={localSettings.autoStartPomodoros} 
                                 onChange={(e) => handleChange('autoStartPomodoros', e.target.checked)} 
                             />
                             <span className="slider"></span>
@@ -118,10 +132,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         <div className="settings-input" style={{ width: '80px' }}>
                             <TextInput 
                                 type="number" 
-                                value={settings.longBreakInterval.toString()} 
+                                value={localSettings.longBreakInterval.toString()} 
                                 onChange={(val) => handleChange('longBreakInterval', parseInt(val) || 0)}
                             />
                         </div>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1.5rem' }}>
+                        <button 
+                            onClick={onClose}
+                            style={{ padding: '0.5rem 1rem', borderRadius: '6px', border: '1px solid #e0e0e0', backgroundColor: '#fff', cursor: 'pointer', fontWeight: 600, color: '#4f4f4f', fontFamily: '"Space Grotesk", sans-serif' }}
+                        >
+                            Cancel
+                        </button>
+                        <button 
+                            onClick={handleSave}
+                            style={{ padding: '0.5rem 1.5rem', borderRadius: '6px', border: 'none', backgroundColor: '#333', color: '#fff', cursor: 'pointer', fontWeight: 600, fontFamily: '"Space Grotesk", sans-serif' }}
+                        >
+                            Save
+                        </button>
                     </div>
                 </div>
             </div>

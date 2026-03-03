@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import './App.css';
 import { ModeSelector } from './components/ModeSelector';
 import { TimerDisplay } from './components/TimerDisplay';
+import { Tasks } from './components/Tasks';
 import { Controls } from './components/Controls';
 import { SettingsModal } from './components/SettingsModal';
 import { useMobile } from './hooks/useMobile';
@@ -147,15 +148,16 @@ function App() {
       ))}
       <div className="background-overlay"></div>
       
-      <img src="/logo.png" alt="FocusLeague" className="app-logo" style={{ top: isMobile ? '3rem' : '1rem', height: isMobile ? '48px' : '64px' }} />
+      <img src="/logo.png" alt="FocusLeague" className="app-logo" style={{ top: isMobile ? '3rem' : '1.5rem', height: isMobile ? '48px' : '72px' }} />
       <ModeSelector activeMode={mode} onModeChange={handleModeChange} />
-      <TimerDisplay time={formatTime(timeLeft)} />
+      <TimerDisplay time={formatTime(timeLeft)} activeMode={mode} />
       <Controls
         onStart={togglePlay}
         onReset={handleReset}
         onSettings={() => setIsSettingsOpen(true)}
         isPlaying={isPlaying}
       />
+      <Tasks />
       
    
       <SettingsModal 

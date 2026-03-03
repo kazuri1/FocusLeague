@@ -1,0 +1,777 @@
+import React, { useState, useEffect, useRef } from 'react';
+import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import ArrowDropUpIcon from '@mui/icons-material/ArrowDropUp';
+import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+
+interface Project {
+    id: string;
+    name: string;
+    color: string;
+}
+
+interface Task {
+    id: string;
+    title: string;
+    note: string;
+    estPomodoros: number;
+    completedPomodoros: number;
+    projectId?: string;
+}
+
+interface TaskFormProps {
+    initialTitle?: string;
+    initialNote?: string;
+    initialEstPomodoros?: number;
+    initialProjectId?: string;
+    projects: Project[];
+    onSave: (title: string, note: string, estPomodoros: number, projectId?: string) => void;
+    onCancel: () => void;
+    onAddProject: (name: string) => string;
+    onDeleteProject: (id: string) => void;
+}
+
+const generateRandomColor = () => {
+    const colors = ['#e1f5fe', '#e8f5e9', '#fff3e0', '#fce4ec', '#f3e5f5', '#e0f7fa', '#e8eaf6'];
+    return colors[Math.floor(Math.random() * colors.length)];
+};
+
+const TaskForm: React.FC<TaskFormProps> = ({
+    initialTitle = '',
+    initialNote = '',
+    initialEstPomodoros = 1,
+    initialProjectId,
+    projects,
+    onSave,
+    onCancel,
+    onAddProject,
+    onDeleteProject
+}) => {
+    const [title, setTitle] = useState(initialTitle);
+    const [note, setNote] = useState(initialNote);
+    const [isNoteOpen, setIsNoteOpen] = useState(!!initialNote);
+    const [estPomodoros, setEstPomodoros] = useState(initialEstPomodoros);
+    const [projectId, setProjectId] = useState<string | undefined>(initialProjectId);
+    
+    const [isProjectMenuOpen, setIsProjectMenuOpen] = useState(false);
+    const [newProjectName, setNewProjectName] = useState('');
+    
+    const projectMenuRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (isProjectMenuOpen && projectMenuRef.current && !projectMenuRef.current.contains(event.target as Node)) {
+                setIsProjectMenuOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [isProjectMenuOpen]);
+
+    const handleIncrement = () => setEstPomodoros(prev => prev + 1);
+    const handleDecrement = () => setEstPomodoros(prev => Math.max(1, prev - 1));
+
+    const handleCreateProject = () => {
+        if (newProjectName.trim()) {
+            const newId = onAddProject(newProjectName.trim());
+            setProjectId(newId);
+            setNewProjectName('');
+            setIsProjectMenuOpen(false);
+        }
+    };
+
+    const selectedProject = projects.find(p => p.id === projectId);
+
+    return (
+        <div style={{
+            backgroundColor: '#ffffff',
+            borderRadius: '8px',
+            overflow: 'hidden',
+            boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
+            marginTop: '1rem',
+            marginBottom: '1rem',
+            transition: 'all 0.3s ease',
+            position: 'relative'
+        }}>
+            <div style={{ padding: '1.5rem 1.5rem 1rem 1.5rem' }}>
+                <input 
+                    type="text"
+                    className="task-title-input"
+                    placeholder="What are you working on?"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    style={{
+                        width: '100%',
+                        border: 'none',
+                        outline: 'none',
+                        fontSize: '1.4rem',
+                        fontWeight: 700,
+                        fontStyle: 'italic',
+                        color: '#555',
+                        backgroundColor: '#f2f2f2',
+                        borderRadius: '6px',
+                        padding: '0.8rem',
+                        boxSizing: 'border-box',
+                        marginBottom: isNoteOpen ? '1rem' : '1.5rem',
+                        fontFamily: '"Space Grotesk", sans-serif'
+                    }}
+                />
+
+                {isNoteOpen && (
+                    <textarea
+                        placeholder="Some notes..."
+                        value={note}
+                        onChange={(e) => setNote(e.target.value)}
+                        style={{
+                            width: '100%',
+                            minHeight: '80px',
+                            padding: '0.8rem',
+                            marginBottom: '1.5rem',
+                            backgroundColor: '#f2f2f2',
+                            border: 'none',
+                            borderRadius: '6px',
+                            outline: 'none',
+                            fontFamily: '"Space Grotesk", sans-serif',
+                            fontSize: '1rem',
+                            color: '#555',
+                            resize: 'vertical',
+                            boxSizing: 'border-box'
+                        }}
+                    />
+                )}
+                
+                <div style={{ fontWeight: 700, color: '#555', fontSize: '1rem', marginBottom: '0.5rem' }}>
+                    Est Pomodoros
+                </div>
+                
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+                    <input 
+                        type="number"
+                        value={estPomodoros}
+                        onChange={(e) => setEstPomodoros(Math.max(1, parseInt(e.target.value) || 1))}
+                        style={{
+                            width: '4rem',
+                            padding: '0.5rem',
+                            backgroundColor: '#efefef',
+                            border: 'none',
+                            borderRadius: '6px',
+                            fontSize: '1rem',
+                            fontWeight: 600,
+                            color: '#555',
+                            outline: 'none',
+                            fontFamily: '"Space Grotesk", sans-serif'
+                        }}
+                    />
+                    <button 
+                        onClick={handleIncrement}
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: '#ffffff',
+                            border: '1px solid #dfdfdf',
+                            borderRadius: '6px',
+                            padding: '0.4rem',
+                            cursor: 'pointer',
+                            color: '#555',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+                        }}
+                    >
+                        <ArrowDropUpIcon />
+                    </button>
+                    <button 
+                        onClick={handleDecrement}
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: '#ffffff',
+                            border: '1px solid #dfdfdf',
+                            borderRadius: '6px',
+                            padding: '0.4rem',
+                            cursor: 'pointer',
+                            color: '#555',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+                        }}
+                    >
+                        <ArrowDropDownIcon />
+                    </button>
+                </div>
+
+                {isProjectMenuOpen && !selectedProject && (
+                    <div style={{ marginBottom: '1.5rem', width: '100%' }}>
+                        <input 
+                            type="text"
+                            placeholder="Project name... (Press Enter to add)"
+                            value={newProjectName}
+                            onChange={(e) => setNewProjectName(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handleCreateProject();
+                                }
+                            }}
+                            style={{
+                                width: '100%',
+                                padding: '0.8rem',
+                                backgroundColor: '#f2f2f2',
+                                border: 'none',
+                                borderRadius: '6px',
+                                outline: 'none',
+                                fontFamily: '"Space Grotesk", sans-serif',
+                                fontSize: '1rem',
+                                color: '#555',
+                                boxSizing: 'border-box',
+                                marginBottom: projects.length > 0 ? '0.8rem' : '0'
+                            }}
+                        />
+                        {projects.length > 0 && (
+                            <div style={{ 
+                                display: 'flex', 
+                                flexWrap: 'wrap', 
+                                gap: '0.5rem'
+                            }}>
+                                {projects.map(p => (
+                                    <div 
+                                        key={p.id}
+                                        onClick={() => {
+                                            setProjectId(p.id);
+                                            setIsProjectMenuOpen(false);
+                                        }}
+                                        style={{
+                                            padding: '0.3rem 0.8rem',
+                                            backgroundColor: p.color,
+                                            borderRadius: '12px',
+                                            cursor: 'pointer',
+                                            fontSize: '0.85rem',
+                                            fontWeight: 700,
+                                            color: '#444',
+                                            boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                                            transition: 'transform 0.1s ease',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '0.4rem'
+                                        }}
+                                        onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+                                        onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                                    >
+                                        <span>{p.name}</span>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onDeleteProject(p.id);
+                                            }}
+                                            style={{
+                                                background: 'none',
+                                                border: 'none',
+                                                color: '#777',
+                                                cursor: 'pointer',
+                                                padding: '0 0.2rem',
+                                                fontSize: '1rem',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                fontWeight: 700
+                                            }}
+                                        >
+                                            &times;
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+                
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginTop: '1rem' }}>
+                    {!isNoteOpen && (
+                        <button 
+                            onClick={() => setIsNoteOpen(true)}
+                            style={{
+                                background: 'none',
+                                border: 'none',
+                                color: '#aaaaaa',
+                                textDecoration: 'underline',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                padding: 0,
+                                fontSize: '0.9rem',
+                                fontFamily: '"Space Grotesk", sans-serif'
+                            }}
+                        >
+                            + Add Note
+                        </button>
+                    )}
+                    
+                    {selectedProject ? (
+                        <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.5rem',
+                            backgroundColor: selectedProject.color,
+                            padding: '0.3rem 0.6rem',
+                            borderRadius: '12px',
+                            fontSize: '0.85rem',
+                            fontWeight: 700,
+                            color: '#444'
+                        }}>
+                            {selectedProject.name}
+                            <button 
+                                onClick={() => setProjectId(undefined)}
+                                style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    color: '#444',
+                                    cursor: 'pointer',
+                                    padding: '0',
+                                    fontSize: '0.9rem',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    fontWeight: 700
+                                }}
+                            >
+                                x
+                            </button>
+                        </div>
+                    ) : (
+                        !isProjectMenuOpen && (
+                            <button 
+                                onClick={() => setIsProjectMenuOpen(true)}
+                                style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    color: '#aaaaaa',
+                                    textDecoration: 'underline',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                    padding: 0,
+                                    fontSize: '0.9rem',
+                                    fontFamily: '"Space Grotesk", sans-serif'
+                                }}
+                            >
+                                + Add Project
+                            </button>
+                        )
+                    )}
+                </div>
+            </div>
+
+            <div style={{
+                backgroundColor: '#f6f6f6',
+                padding: '1rem 1.5rem',
+                display: 'flex',
+                justifyContent: 'flex-end',
+                alignItems: 'center',
+                gap: '1rem',
+                borderTop: '1px solid #eeeeee'
+            }}>
+                <button 
+                    onClick={onCancel}
+                    style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#888888',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        fontSize: '0.95rem',
+                        fontFamily: '"Space Grotesk", sans-serif'
+                    }}
+                >
+                    Cancel
+                </button>
+                <button 
+                    onClick={() => {
+                        if (title.trim()) {
+                            onSave(title, note, estPomodoros, projectId);
+                        }
+                    }}
+                    style={{
+                        backgroundColor: '#444444',
+                        color: '#ffffff',
+                        border: 'none',
+                        borderRadius: '6px',
+                        padding: '0.5rem 1.5rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        fontSize: '0.95rem',
+                        fontFamily: '"Space Grotesk", sans-serif',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                    }}
+                >
+                    Save
+                </button>
+            </div>
+        </div>
+    );
+};
+
+export const Tasks: React.FC = () => {
+    const [tasks, setTasks] = useState<Task[]>([]);
+    const [projects, setProjects] = useState<Project[]>([]);
+    const [isAdding, setIsAdding] = useState(false);
+    
+    // Kebab menu & Edit state
+    const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+    const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+    
+    const menuRef = useRef<HTMLDivElement>(null);
+
+    // Close menu when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (openMenuId && menuRef.current && !menuRef.current.contains(event.target as Node)) {
+                setOpenMenuId(null);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [openMenuId]);
+
+    const handleAddProject = (name: string) => {
+        const newProject: Project = {
+            id: Date.now().toString(),
+            name,
+            color: generateRandomColor()
+        };
+        setProjects(prev => [...prev, newProject]);
+        return newProject.id;
+    };
+
+    const handleDeleteProject = (id: string) => {
+        setProjects(prev => prev.filter(p => p.id !== id));
+        setTasks(prev => prev.map(t => 
+            t.projectId === id ? { ...t, projectId: undefined } : t
+        ));
+    };
+
+    const handleCreateSave = (title: string, note: string, estPomodoros: number, projectId?: string) => {
+        const newTask: Task = {
+            id: Date.now().toString(),
+            title: title.trim(),
+            note: note.trim(),
+            estPomodoros,
+            completedPomodoros: 0,
+            projectId
+        };
+        setTasks(prev => [...prev, newTask]);
+        setIsAdding(false);
+    };
+
+    const handleUpdateSave = (id: string, newTitle: string, newNote: string, newEst: number, newProjectId?: string) => {
+        setTasks(prev => prev.map(t => 
+            t.id === id ? { ...t, title: newTitle.trim(), note: newNote.trim(), estPomodoros: newEst, projectId: newProjectId } : t
+        ));
+        setEditingTaskId(null);
+    };
+
+    const handleDelete = (id: string) => {
+        setTasks(prev => prev.filter(t => t.id !== id));
+        setOpenMenuId(null);
+    };
+
+    return (
+        <div style={{
+            width: '100%',
+            maxWidth: '480px',
+            margin: '2rem auto',
+            padding: '0 1rem',
+            boxSizing: 'border-box',
+            fontFamily: '"Space Grotesk", sans-serif',
+            zIndex: 10
+        }}>
+            <style>
+                {`
+                    .task-title-input::placeholder {
+                        color: #cccccc !important;
+                        opacity: 1;
+                    }
+                `}
+            </style>
+            <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                borderBottom: '2px solid rgba(255,255,255,0.6)',
+                paddingBottom: '0.5rem',
+                marginBottom: '1rem'
+            }}>
+                <h2 style={{
+                    margin: 0,
+                    fontSize: '1.25rem',
+                    color: '#ffffff',
+                    fontWeight: 700
+                }}>
+                    Tasks
+                </h2>
+                <button style={{
+                    background: 'rgba(255,255,255,0.2)',
+                    border: 'none',
+                    borderRadius: '4px',
+                    color: '#ffffff',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '0.2rem'
+                }}>
+                    <MoreVertIcon fontSize="small" />
+                </button>
+            </div>
+
+            {/* Render Saved Tasks */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
+                {tasks.map((task) => {
+                    if (editingTaskId === task.id) {
+                        return (
+                            <TaskForm 
+                                key={task.id}
+                                initialTitle={task.title}
+                                initialNote={task.note}
+                                initialEstPomodoros={task.estPomodoros}
+                                initialProjectId={task.projectId}
+                                projects={projects}
+                                onAddProject={handleAddProject}
+                                onDeleteProject={handleDeleteProject}
+                                onSave={(title, note, est, projId) => handleUpdateSave(task.id, title, note, est, projId)}
+                                onCancel={() => setEditingTaskId(null)}
+                            />
+                        );
+                    }
+
+                    const taskProject = task.projectId ? projects.find(p => p.id === task.projectId) : undefined;
+
+                    return (
+                        <div key={task.id} style={{
+                            backgroundColor: '#ffffff',
+                            borderRadius: '4px',
+                            borderLeft: '6px solid #222222',
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                            padding: '1rem',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            transition: 'transform 0.1s ease',
+                        }}>
+                            <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between'
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', flex: 1 }}>
+                                    <CheckCircleIcon style={{ color: '#dfdfdf', fontSize: '1.8rem', cursor: 'pointer' }} />
+                                    <span style={{
+                                        color: '#555555',
+                                        fontWeight: 700,
+                                        fontSize: '1.1rem',
+                                        fontFamily: '"Space Grotesk", sans-serif',
+                                        cursor: 'pointer',
+                                    }}>
+                                        {task.title}
+                                    </span>
+                                    {taskProject && (
+                                        <div style={{
+                                            backgroundColor: taskProject.color,
+                                            padding: '0.2rem 0.6rem',
+                                            borderRadius: '12px',
+                                            fontSize: '0.75rem',
+                                            fontWeight: 700,
+                                            color: '#444',
+                                            marginLeft: '0.5rem'
+                                        }}>
+                                            {taskProject.name}
+                                        </div>
+                                    )}
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', position: 'relative' }}>
+                                    <span style={{ color: '#aaaaaa', fontWeight: 600, fontSize: '1rem', fontFamily: '"Space Grotesk", sans-serif' }}>
+                                        {task.completedPomodoros} / {task.estPomodoros}
+                                    </span>
+                                    
+                                    <div ref={openMenuId === task.id ? menuRef : null}>
+                                        <button 
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setOpenMenuId(openMenuId === task.id ? null : task.id);
+                                            }}
+                                            style={{
+                                                background: 'none',
+                                                border: '1px solid #e0e0e0',
+                                                borderRadius: '4px',
+                                                color: '#888888',
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                padding: '0.1rem',
+                                                backgroundColor: openMenuId === task.id ? '#eeeeee' : 'transparent'
+                                            }}
+                                        >
+                                            <MoreVertIcon fontSize="small" />
+                                        </button>
+                                        
+                                        {openMenuId === task.id && (
+                                            <div style={{
+                                                position: 'absolute',
+                                                top: '100%',
+                                                right: 0,
+                                                marginTop: '0.5rem',
+                                                backgroundColor: '#ffffff',
+                                                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                                                borderRadius: '6px',
+                                                overflow: 'hidden',
+                                                zIndex: 50,
+                                                minWidth: '120px',
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                border: '1px solid #eeeeee'
+                                            }}>
+                                                <button 
+                                                    onClick={() => {
+                                                        setEditingTaskId(task.id);
+                                                        setOpenMenuId(null);
+                                                    }}
+                                                    style={{
+                                                        padding: '0.8rem 1rem',
+                                                        textAlign: 'left',
+                                                        background: 'none',
+                                                        border: 'none',
+                                                        borderBottom: '1px solid #f0f0f0',
+                                                        cursor: 'pointer',
+                                                        color: '#555',
+                                                        fontWeight: 600,
+                                                        fontFamily: '"Space Grotesk", sans-serif',
+                                                        fontSize: '0.95rem'
+                                                    }}
+                                                    onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f9f9f9'}
+                                                    onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                                >
+                                                    Edit
+                                                </button>
+                                                <button 
+                                                    onClick={() => handleDelete(task.id)}
+                                                    style={{
+                                                        padding: '0.8rem 1rem',
+                                                        textAlign: 'left',
+                                                        background: 'none',
+                                                        border: 'none',
+                                                        cursor: 'pointer',
+                                                        color: '#e74c3c',
+                                                        fontWeight: 600,
+                                                        fontFamily: '"Space Grotesk", sans-serif',
+                                                        fontSize: '0.95rem'
+                                                    }}
+                                                    onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#fdf2f0'}
+                                                    onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                                                >
+                                                    Delete
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            {task.note && (
+                                <div style={{
+                                    backgroundColor: '#fcf8d4',
+                                    borderRadius: '4px',
+                                    padding: '0.8rem',
+                                    marginTop: '1rem',
+                                    color: '#666555',
+                                    fontSize: '0.95rem',
+                                    fontFamily: '"Space Grotesk", sans-serif',
+                                    boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.03)',
+                                    marginLeft: '2.6rem' // Indent to align with text
+                                }}>
+                                    {task.note}
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
+            </div>
+
+            {isAdding ? (
+                <TaskForm 
+                    projects={projects}
+                    onAddProject={handleAddProject}
+                    onDeleteProject={handleDeleteProject}
+                    onSave={handleCreateSave}
+                    onCancel={() => setIsAdding(false)}
+                />
+            ) : (
+                <button 
+                    onClick={() => setIsAdding(true)}
+                    style={{
+                        width: '100%',
+                        padding: '1.2rem',
+                        backgroundColor: 'rgba(0,0,0,0.1)',
+                        border: '2px dashed rgba(255,255,255,0.4)',
+                        borderRadius: '8px',
+                        color: '#ffffff',
+                        fontSize: '1.1rem',
+                        fontWeight: 600,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.5rem',
+                        cursor: 'pointer',
+                        fontFamily: '"Space Grotesk", sans-serif',
+                        transition: 'all 0.2s ease',
+                    }}
+                    onMouseOver={(e) => {
+                        e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.2)';
+                        e.currentTarget.style.borderColor = 'rgba(255,255,255,0.6)';
+                    }}
+                    onMouseOut={(e) => {
+                        e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.1)';
+                        e.currentTarget.style.borderColor = 'rgba(255,255,255,0.4)';
+                    }}
+                >
+                    <AddCircleOutlineIcon /> Add Task
+                </button>
+            )}
+
+            {tasks.length > 0 && (() => {
+                const totalEst = tasks.reduce((sum, t) => sum + t.estPomodoros, 0);
+                const totalComp = tasks.reduce((sum, t) => sum + t.completedPomodoros, 0);
+                const remaining = Math.max(0, totalEst - totalComp);
+                const hours = (remaining * 25) / 60; // Assumes 25 min pomodoros
+                
+                const finishDate = new Date();
+                finishDate.setMinutes(finishDate.getMinutes() + (remaining * 25));
+                
+                return (
+                    <div style={{
+                        marginTop: '1.5rem',
+                        padding: '1.2rem',
+                        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                        borderTop: '1px solid rgba(255,255,255,0.3)',
+                        borderRadius: '4px',
+                        color: '#ffffff',
+                        display: 'flex',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        gap: '1.5rem',
+                        fontFamily: '"Space Grotesk", sans-serif',
+                        fontSize: '1.05rem',
+                    }}>
+                        <div>
+                            <span style={{ color: '#rgba(255, 255, 255, 0.8)' }}>Pomos:</span>{' '}
+                            <span style={{ fontWeight: 700, fontSize: '1.4rem' }}>{totalComp}</span> / {totalEst}
+                        </div>
+                        <div>
+                            <span style={{ color: '#rgba(255, 255, 255, 0.8)' }}>Finish At:</span>{' '}
+                            <span style={{ fontWeight: 700, fontSize: '1.4rem' }}>
+                                {finishDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>{' '}
+                            <span style={{ fontSize: '0.9rem', opacity: 0.8 }}>
+                                ({hours.toFixed(1)}h)
+                            </span>
+                        </div>
+                    </div>
+                );
+            })()}
+        </div>
+    );
+};
