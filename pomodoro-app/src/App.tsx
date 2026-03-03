@@ -3,7 +3,6 @@ import './App.css';
 import { ModeSelector } from './components/ModeSelector';
 import { TimerDisplay } from './components/TimerDisplay';
 import { Controls } from './components/Controls';
-import { SpotifyPlayer } from './components/SpotifyPlayer';
 import { SettingsModal } from './components/SettingsModal';
 import { useMobile } from './hooks/useMobile';
 import type { TimerSettings } from './components/SettingsModal';
@@ -69,14 +68,14 @@ function App() {
 
   useEffect(() => {
     if (isPlaying && timeLeft === 0) {
-      const audio = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
+      const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
       audio.loop = true;
       audio.play().catch(e => console.error("Error playing sound:", e));
       
       setTimeout(() => {
           audio.pause();
           audio.currentTime = 0;
-      }, 2000);
+      }, 5000);
 
       let nextMode: Mode = 'pomodoro';
       let nextPlaying = false;
@@ -134,10 +133,18 @@ function App() {
 
   return (
     <div className="app-container" style={{ padding: isMobile ? '1rem' : '0' }}>
-      <div 
-        className="background-image" 
-        style={{ backgroundImage: `url(${NATURE_IMAGES[currentImageIndex]})` }}
-      ></div>
+      {NATURE_IMAGES.map((imgUrl, index) => (
+        <div 
+          key={imgUrl}
+          className="background-image" 
+          style={{ 
+            backgroundImage: `url(${imgUrl})`,
+            opacity: index === currentImageIndex ? 1 : 0,
+            transition: 'opacity 1.5s ease-in-out',
+            zIndex: 0
+          }}
+        ></div>
+      ))}
       <div className="background-overlay"></div>
       
       <img src="/logo.png" alt="FocusLeague" className="app-logo" style={{ top: isMobile ? '3rem' : '1rem', height: isMobile ? '48px' : '64px' }} />
@@ -150,7 +157,7 @@ function App() {
         isPlaying={isPlaying}
       />
       
-      {!isMobile && <SpotifyPlayer />}
+   
       <SettingsModal 
         isOpen={isSettingsOpen} 
         onClose={() => setIsSettingsOpen(false)} 
