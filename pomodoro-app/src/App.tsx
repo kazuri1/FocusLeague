@@ -3,10 +3,22 @@ import './App.css';
 import { ModeSelector } from './components/ModeSelector';
 import { TimerDisplay } from './components/TimerDisplay';
 import { Controls } from './components/Controls';
+import { SpotifyPlayer } from './components/SpotifyPlayer';
 import { SettingsModal } from './components/SettingsModal';
+import { useMobile } from './hooks/useMobile';
 import type { TimerSettings } from './components/SettingsModal';
 
+/* eslint-disable react-hooks/set-state-in-effect */
+
 type Mode = 'pomodoro' | 'short break' | 'long break';
+
+const NATURE_IMAGES = [
+  "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?q=80&w=2560&auto=format&fit=crop", // Forest path
+  "https://images.unsplash.com/photo-1472214103451-9374bd1c798e?q=80&w=2560&auto=format&fit=crop", // Mountains
+  "https://images.unsplash.com/photo-1469474968028-56623f02e42e?q=80&w=2560&auto=format&fit=crop", // Nature landscape
+  "https://images.unsplash.com/photo-1501854140801-50d01698950b?q=80&w=2560&auto=format&fit=crop", // Calm lake
+  "https://images.unsplash.com/photo-1433086966358-54859d0ed716?q=80&w=2560&auto=format&fit=crop"  // Waterfall
+];
 
 const defaultSettings: TimerSettings = {
   pomodoro: 25,
@@ -21,6 +33,8 @@ function App() {
   const [mode, setMode] = useState<Mode>('pomodoro');
   const [settings, setSettings] = useState<TimerSettings>(defaultSettings);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const isMobile = useMobile();
 
   const getModeTimeSeconds = (currentMode: Mode, currentSettings: TimerSettings) => {
     if (currentMode === 'pomodoro') return currentSettings.pomodoro * 60;
@@ -44,6 +58,14 @@ function App() {
     }
     return () => clearInterval(interval);
   }, [isPlaying]);
+
+  useEffect(() => {
+    // Change background image every 30 seconds
+    const bgInterval = setInterval(() => {
+        setCurrentImageIndex((prev) => (prev + 1) % NATURE_IMAGES.length);
+    }, 30000);
+    return () => clearInterval(bgInterval);
+  }, []);
 
   useEffect(() => {
     if (isPlaying && timeLeft === 0) {
@@ -106,9 +128,19 @@ function App() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  useEffect(() => {
+    document.title = `${formatTime(timeLeft)} - FocusLeague`;
+  }, [timeLeft]);
+
   return (
-    <div className="app-container">
-      <img src="/logo.png" alt="FocusLeague" className="app-logo" />
+    <div className="app-container" style={{ padding: isMobile ? '1rem' : '0' }}>
+      <div 
+        className="background-image" 
+        style={{ backgroundImage: `url(${NATURE_IMAGES[currentImageIndex]})` }}
+      ></div>
+      <div className="background-overlay"></div>
+      
+      <img src="/logo.png" alt="FocusLeague" className="app-logo" style={{ top: isMobile ? '3rem' : '1rem', height: isMobile ? '48px' : '64px' }} />
       <ModeSelector activeMode={mode} onModeChange={handleModeChange} />
       <TimerDisplay time={formatTime(timeLeft)} />
       <Controls
@@ -117,6 +149,8 @@ function App() {
         onSettings={() => setIsSettingsOpen(true)}
         isPlaying={isPlaying}
       />
+      
+      {!isMobile && <SpotifyPlayer />}
       <SettingsModal 
         isOpen={isSettingsOpen} 
         onClose={() => setIsSettingsOpen(false)} 

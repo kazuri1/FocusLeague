@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Button } from 'pulseui-base';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import SettingsIcon from '@mui/icons-material/Settings';
+import { useMobile } from '../hooks/useMobile';
 
 interface ControlsProps {
     onStart: () => void;
@@ -12,6 +13,7 @@ interface ControlsProps {
 
 export const Controls: React.FC<ControlsProps> = ({ onStart, onReset, onSettings, isPlaying }) => {
     const [isResetting, setIsResetting] = useState(false);
+    const isMobile = useMobile();
 
     const handleResetClick = () => {
         setIsResetting(true);
@@ -48,7 +50,7 @@ export const Controls: React.FC<ControlsProps> = ({ onStart, onReset, onSettings
                 }}
                 aria-label="Reset Timer"
             >
-                <RefreshIcon style={{ fontSize: '3rem' }} className={`reset-icon ${isResetting ? 'spinning' : ''}`} />
+                <RefreshIcon style={{ fontSize: isMobile ? '2rem' : '3rem' }} className={`reset-icon ${isResetting ? 'spinning' : ''}`} />
             </button>
             <button
                 onClick={onSettings}
@@ -65,7 +67,7 @@ export const Controls: React.FC<ControlsProps> = ({ onStart, onReset, onSettings
                 }}
                 aria-label="Settings"
             >
-                <SettingsIcon style={{ fontSize: '2.5rem' }} />
+                <SettingsIcon style={{ fontSize: isMobile ? '1.8rem' : '2.5rem' }} />
             </button>
         </div>
     );

@@ -1,14 +1,20 @@
 import React from 'react';
+import { useMobile } from '../hooks/useMobile';
 
 interface TimerDisplayProps {
     time: string;
 }
 
 export const TimerDisplay: React.FC<TimerDisplayProps> = ({ time }) => {
+    const isMobile = useMobile();
+
     return (
         <div style={{
-            fontSize: '12rem',
+            fontSize: isMobile ? 'min(25vw, 7rem)' : '12rem',
             fontWeight: 700,
+            width: '100%',
+            padding: '0 1rem',
+            boxSizing: 'border-box',
             color: '#ffffff',
             lineHeight: 1,
             marginBottom: '4rem',
