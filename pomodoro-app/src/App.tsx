@@ -82,6 +82,9 @@ function App() {
       let nextPlaying = false;
 
       if (mode === 'pomodoro') {
+          // Dispatch event for Tasks.tsx to increment the active task
+          window.dispatchEvent(new CustomEvent('pomodoroCompleted'));
+          
           const newCount = pomodorosCompleted + 1;
           if (newCount >= settings.longBreakInterval) {
               nextMode = 'long break';
@@ -156,6 +159,7 @@ function App() {
         onReset={handleReset}
         onSettings={() => setIsSettingsOpen(true)}
         isPlaying={isPlaying}
+        hasStarted={timeLeft < getModeTimeSeconds(mode, settings)}
       />
       <Tasks />
       

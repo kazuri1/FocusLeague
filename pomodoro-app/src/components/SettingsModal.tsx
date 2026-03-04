@@ -53,7 +53,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="modal-content" onClick={(e) => e.stopPropagation()}>
                 <div style={{ padding: '1.5rem', fontFamily: '"Space Grotesk", sans-serif' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', paddingBottom: '1.5rem', borderBottom: '1px solid #e0e0e0' }}>
-                        <div style={{ color: '#bdbdbd', fontWeight: 700, letterSpacing: '1px', flex: 1, textAlign: 'center' }}>
+                        <div style={{paddingLeft: '2rem', color: '#bdbdbd', fontWeight: 700, letterSpacing: '1px', flex: 1, textAlign: 'center' }}>
                             SETTING
                         </div>
                         <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#bdbdbd', display: 'flex' }}>

@@ -112,7 +112,7 @@ const TaskForm: React.FC<TaskFormProps> = ({
                         fontSize: '1.4rem',
                         fontWeight: 700,
                         fontStyle: 'italic',
-                        color: '#555',
+                        color: '#c61c1cff',
                         backgroundColor: '#f2f2f2',
                         borderRadius: '6px',
                         padding: '0.8rem',
@@ -477,6 +477,35 @@ export const Tasks: React.FC = () => {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [openMenuId]);
 
+    // Handle Pomodoro Timer Completion Broadcast
+    useEffect(() => {
+        const handlePomodoroCompleted = async () => {
+            if (!activeTaskId) return;
+
+            const activeTask = tasks.find(t => t.id === activeTaskId);
+            if (!activeTask) return;
+
+            const newCount = activeTask.completedPomodoros + 1;
+
+            // Optimistic UI Update
+            setTasks(prev => prev.map(t => t.id === activeTaskId ? { ...t, completedPomodoros: newCount } : t));
+
+            const { error } = await supabase
+                .from('tasks')
+                .update({ completed_pomodoros: newCount })
+                .eq('id', activeTaskId);
+
+            if (error) {
+                // Revert on failure
+                setTasks(prev => prev.map(t => t.id === activeTaskId ? { ...t, completedPomodoros: newCount - 1 } : t));
+                console.error("Failed to auto-increment pomodoro count:", error);
+            }
+        };
+
+        window.addEventListener('pomodoroCompleted', handlePomodoroCompleted);
+        return () => window.removeEventListener('pomodoroCompleted', handlePomodoroCompleted);
+    }, [activeTaskId, tasks]);
+
     const handleAddProject = async (name: string) => {
         const newProject = {
             name,
@@ -705,7 +734,7 @@ export const Tasks: React.FC = () => {
                             style={{
                             backgroundColor: '#ffffff',
                             borderRadius: '4px',
-                            borderLeft: activeTaskId === task.id && !task.isCompleted ? '6px solid #222222' : '6px solid transparent',
+                            borderLeft: activeTaskId === task.id && !task.isCompleted ? '6px solid #d08109ff' : '6px solid transparent',
                             boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
                             padding: '1rem',
                             display: 'flex',

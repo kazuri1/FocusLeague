@@ -9,9 +9,10 @@ interface ControlsProps {
     onReset: () => void;
     onSettings: () => void;
     isPlaying: boolean;
+    hasStarted: boolean;
 }
 
-export const Controls: React.FC<ControlsProps> = ({ onStart, onReset, onSettings, isPlaying }) => {
+export const Controls: React.FC<ControlsProps> = ({ onStart, onReset, onSettings, isPlaying, hasStarted }) => {
     const [isResetting, setIsResetting] = useState(false);
     const isMobile = useMobile();
 
@@ -26,14 +27,16 @@ export const Controls: React.FC<ControlsProps> = ({ onStart, onReset, onSettings
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: '1.5rem',
-            zIndex: 10
+            gap: '1rem',
+            zIndex: 10,
+            marginTop: '-2rem',
+            marginBottom: '3rem'
         }}>
             <Button
                 onClick={onStart}
                 className="start-btn"
             >
-                {isPlaying ? 'pause' : 'start'}
+                {isPlaying ? 'pause' : (hasStarted ? 'continue' : 'start')}
             </Button>
             <button
                 onClick={handleResetClick}
