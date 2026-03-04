@@ -18,6 +18,7 @@ interface Task {
     note: string;
     estPomodoros: number;
     completedPomodoros: number;
+    isCompleted: boolean;
     projectId?: string;
 }
 
@@ -232,8 +233,12 @@ const TaskForm: React.FC<TaskFormProps> = ({
                         {projects.length > 0 && (
                             <div style={{ 
                                 display: 'flex', 
-                                flexWrap: 'wrap', 
-                                gap: '0.5rem'
+                                gap: '0.5rem',
+                                overflowX: 'auto',
+                                whiteSpace: 'nowrap',
+                                paddingBottom: '0.5rem',
+                                scrollbarWidth: 'none', // Firefox
+                                msOverflowStyle: 'none' // IE 10+
                             }}>
                                 {projects.map(p => (
                                     <div 
@@ -254,7 +259,8 @@ const TaskForm: React.FC<TaskFormProps> = ({
                                             transition: 'transform 0.1s ease',
                                             display: 'flex',
                                             alignItems: 'center',
-                                            gap: '0.4rem'
+                                            gap: '0.4rem',
+                                            flexShrink: 0 // Prevent squishing
                                         }}
                                         onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
                                         onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
@@ -415,6 +421,9 @@ export const Tasks: React.FC = () => {
     const [isAdding, setIsAdding] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     
+    // Active task state
+    const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+    
     // Kebab menu & Edit state
     const [openMenuId, setOpenMenuId] = useState<string | null>(null);
     const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
@@ -438,14 +447,19 @@ export const Tasks: React.FC = () => {
                 })));
             }
             if (tasksRes.data) {
-                setTasks(tasksRes.data.map(t => ({
+                const fetchedTasks = tasksRes.data.map(t => ({
                     id: t.id,
                     title: t.title,
                     note: t.note || '',
                     estPomodoros: t.est_pomodoros,
                     completedPomodoros: t.completed_pomodoros,
+                    isCompleted: t.is_completed || false,
                     projectId: t.project_id
-                })));
+                }));
+                setTasks(fetchedTasks);
+                if (fetchedTasks.length > 0 && !activeTaskId) {
+                    setActiveTaskId(fetchedTasks[0].id);
+                }
             }
             setIsLoading(false);
         };
@@ -492,6 +506,7 @@ export const Tasks: React.FC = () => {
             note: note.trim() || null,
             est_pomodoros: estPomodoros,
             completed_pomodoros: 0,
+            is_completed: false,
             project_id: projectId || null
         }]).select().single();
 
@@ -502,10 +517,14 @@ export const Tasks: React.FC = () => {
                 note: data.note || '',
                 estPomodoros: data.est_pomodoros,
                 completedPomodoros: data.completed_pomodoros,
+                isCompleted: data.is_completed || false,
                 projectId: data.project_id
             };
             setTasks(prev => [...prev, newTask]);
             setIsAdding(false);
+            if (!activeTaskId) {
+                setActiveTaskId(newTask.id);
+            }
         }
     };
 
@@ -534,8 +553,36 @@ export const Tasks: React.FC = () => {
     const handleDelete = async (id: string) => {
         const { error } = await supabase.from('tasks').delete().eq('id', id);
         if (!error) {
-            setTasks(prev => prev.filter(t => t.id !== id));
+            setTasks(prev => {
+                const remaining = prev.filter(t => t.id !== id);
+                if (activeTaskId === id) {
+                    setActiveTaskId(remaining.length > 0 ? remaining[0].id : null);
+                }
+                return remaining;
+            });
             setOpenMenuId(null);
+        }
+    };
+
+    const handleToggleComplete = async (e: React.MouseEvent, task: Task) => {
+        e.stopPropagation(); // prevent activating the task
+        
+        const newStatus = !task.isCompleted;
+        
+        // Optimistic UI Update
+        setTasks(prev => prev.map(t => t.id === task.id ? { ...t, isCompleted: newStatus } : t));
+        if (newStatus && activeTaskId === task.id) {
+            const nextActiveId = tasks.find(t => t.id !== task.id && !t.isCompleted)?.id;
+            setActiveTaskId(nextActiveId || null);
+        }
+
+        const { error } = await supabase.from('tasks').update({ is_completed: newStatus }).eq('id', task.id);
+        
+        if (error) {
+            // Revert changes on error
+            setTasks(prev => prev.map(t => t.id === task.id ? { ...t, isCompleted: !newStatus } : t));
+            console.error("Error toggling completion:", error);
+            alert("Database Error! Did you make sure to create the `is_completed` column in Supabase? Details: " + error.message);
         }
     };
 
@@ -576,6 +623,24 @@ export const Tasks: React.FC = () => {
                     }
                 `}
             </style>
+
+            {/* Active Task Indicator */}
+            {activeTaskId && tasks.find(t => t.id === activeTaskId) && (
+                <div style={{
+                    textAlign: 'center',
+                    marginBottom: '1.5rem',
+                    color: '#ffffff',
+                    fontFamily: '"Space Grotesk", sans-serif'
+                }}>
+                    <div style={{ fontSize: '1rem', opacity: 0.8, fontWeight: 500, marginBottom: '0.2rem' }}>
+                        #{(tasks.find(t => t.id === activeTaskId)?.completedPomodoros || 0) + 1}
+                    </div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 700 }}>
+                        {tasks.find(t => t.id === activeTaskId)?.title}
+                    </div>
+                </div>
+            )}
+
             <div style={{
                 display: 'flex',
                 justifyContent: 'space-between',
@@ -609,7 +674,12 @@ export const Tasks: React.FC = () => {
 
             {/* Render Saved Tasks */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
-                {tasks.map((task) => {
+                {(() => {
+                    const uncompletedTasks = tasks.filter(t => !t.isCompleted);
+                    const completedTasks = tasks.filter(t => t.isCompleted);
+                    const sortedTasks = [...uncompletedTasks, ...completedTasks];
+
+                    return sortedTasks.map((task) => {
                     if (editingTaskId === task.id) {
                         return (
                             <TaskForm 
@@ -630,29 +700,56 @@ export const Tasks: React.FC = () => {
                     const taskProject = task.projectId ? projects.find(p => p.id === task.projectId) : undefined;
 
                     return (
-                        <div key={task.id} style={{
+                        <div key={task.id} 
+                            onClick={() => setActiveTaskId(task.id)}
+                            style={{
                             backgroundColor: '#ffffff',
                             borderRadius: '4px',
-                            borderLeft: '6px solid #222222',
+                            borderLeft: activeTaskId === task.id && !task.isCompleted ? '6px solid #222222' : '6px solid transparent',
                             boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
                             padding: '1rem',
                             display: 'flex',
                             flexDirection: 'column',
-                            transition: 'transform 0.1s ease',
+                            transition: 'all 0.15s ease',
+                            cursor: 'pointer',
+                            opacity: task.isCompleted ? 0.6 : 1, // Dim completed tasks
                         }}>
                             <div style={{
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'space-between'
                             }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', flex: 1 }}>
-                                    <CheckCircleIcon style={{ color: '#dfdfdf', fontSize: '1.8rem', cursor: 'pointer' }} />
-                                    <span style={{
-                                        color: '#555555',
-                                        fontWeight: 700,
+                                <div style={{ 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    gap: '0.8rem', 
+                                    flex: 1, 
+                                    minWidth: 0, /* Allow flex child to shrink properly */
+                                    overflowX: 'auto',
+                                    whiteSpace: 'nowrap',
+                                    scrollbarWidth: 'none',
+                                    msOverflowStyle: 'none'
+                                }}>
+                                    <CheckCircleIcon 
+                                        onClick={(e) => handleToggleComplete(e, task)}
+                                        style={{ 
+                                            color: task.isCompleted ? '#4caf50' : '#dfdfdf', // Green when checked
+                                            fontSize: '1.8rem', 
+                                            cursor: 'pointer', 
+                                            flexShrink: 0 
+                                        }} 
+                                    />
+                                    <span 
+                                        title={task.title}
+                                        style={{
+                                        color: task.isCompleted ? '#aaaaaa' : '#555555',
+                                        fontWeight: task.isCompleted ? 500 : 700,
+                                        textDecoration: task.isCompleted ? 'line-through' : 'none',
                                         fontSize: '1.1rem',
                                         fontFamily: '"Space Grotesk", sans-serif',
                                         cursor: 'pointer',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
                                     }}>
                                         {task.title}
                                     </span>
@@ -664,7 +761,8 @@ export const Tasks: React.FC = () => {
                                             fontSize: '0.75rem',
                                             fontWeight: 700,
                                             color: '#444',
-                                            marginLeft: '0.5rem'
+                                            marginLeft: '0.5rem',
+                                            flexShrink: 0
                                         }}>
                                             {taskProject.name}
                                         </div>
@@ -776,7 +874,9 @@ export const Tasks: React.FC = () => {
                             )}
                         </div>
                     );
-                })}
+                {/* Tasks loop close */}
+                    });
+                })()}
             </div>
 
             {isAdding ? (
@@ -821,8 +921,9 @@ export const Tasks: React.FC = () => {
             )}
 
             {tasks.length > 0 && (() => {
-                const totalEst = tasks.reduce((sum, t) => sum + t.estPomodoros, 0);
-                const totalComp = tasks.reduce((sum, t) => sum + t.completedPomodoros, 0);
+                const activeTasks = tasks.filter(t => !t.isCompleted);
+                const totalEst = activeTasks.reduce((sum, t) => sum + t.estPomodoros, 0);
+                const totalComp = activeTasks.reduce((sum, t) => sum + t.completedPomodoros, 0);
                 const remaining = Math.max(0, totalEst - totalComp);
                 const hours = (remaining * 25) / 60; // Assumes 25 min pomodoros
                 

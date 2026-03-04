@@ -1,14 +1,15 @@
 .app-container {
-  height: 100dvh;
+  min-height: 100dvh;
   width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
+  padding-top: 150px;
+  padding-bottom: 200px; /* Space for the Spotify player */
   background-color: #1a1a1a;
   color: white;
   position: relative;
-  overflow: hidden;
 }
 
 .background-image {
@@ -43,6 +44,15 @@
   z-index: 50;
   filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.8)) brightness(1.2) contrast(1.1);
 }
+
+@media (max-width: 768px) {
+  .app-logo {
+    top: 1.5rem;
+    left: 1.5rem;
+    height: 64px;
+  }
+}
+
 
 .start-btn {
   background-color: #ffffff !important;
@@ -196,8 +206,6 @@ html, body, #root {
   margin: 0;
   padding: 0;
   width: 100%;
-  height: 100%;
-  overflow: hidden;
 }
 
 .spotify-player-container {
@@ -212,3 +220,12 @@ html, body, #root {
   overflow: hidden;
   background-color: #282828;
 }
+
+@media (max-width: 768px) {
+  .spotify-player-container {
+    width: calc(100vw - 2rem);
+    bottom: 1rem;
+    right: 1rem;
+  }
+}
+

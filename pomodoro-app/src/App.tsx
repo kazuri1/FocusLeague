@@ -133,7 +133,7 @@ function App() {
   }, [timeLeft]);
 
   return (
-    <div className="app-container" style={{ padding: isMobile ? '1rem' : '0' }}>
+    <div className="app-container" style={{ paddingLeft: isMobile ? '1rem' : '0', paddingRight: isMobile ? '1rem' : '0' }}>
       {NATURE_IMAGES.map((imgUrl, index) => (
         <div 
           key={imgUrl}
