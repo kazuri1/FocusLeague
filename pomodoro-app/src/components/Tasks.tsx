@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { supabase } from '../lib/supabase';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import ArrowDropUpIcon from '@mui/icons-material/ArrowDropUp';
@@ -26,10 +27,10 @@ interface TaskFormProps {
     initialEstPomodoros?: number;
     initialProjectId?: string;
     projects: Project[];
-    onSave: (title: string, note: string, estPomodoros: number, projectId?: string) => void;
+    onSave: (title: string, note: string, estPomodoros: number, projectId?: string) => Promise<void>;
     onCancel: () => void;
-    onAddProject: (name: string) => string;
-    onDeleteProject: (id: string) => void;
+    onAddProject: (name: string) => Promise<string | undefined>;
+    onDeleteProject: (id: string) => Promise<void>;
 }
 
 const generateRandomColor = () => {
@@ -72,10 +73,12 @@ const TaskForm: React.FC<TaskFormProps> = ({
     const handleIncrement = () => setEstPomodoros(prev => prev + 1);
     const handleDecrement = () => setEstPomodoros(prev => Math.max(1, prev - 1));
 
-    const handleCreateProject = () => {
+    const handleCreateProject = async () => {
         if (newProjectName.trim()) {
-            const newId = onAddProject(newProjectName.trim());
-            setProjectId(newId);
+            const newId = await onAddProject(newProjectName.trim());
+            if (newId) {
+                setProjectId(newId);
+            }
             setNewProjectName('');
             setIsProjectMenuOpen(false);
         }
@@ -381,9 +384,9 @@ const TaskForm: React.FC<TaskFormProps> = ({
                     Cancel
                 </button>
                 <button 
-                    onClick={() => {
+                    onClick={async () => {
                         if (title.trim()) {
-                            onSave(title, note, estPomodoros, projectId);
+                            await onSave(title, note, estPomodoros, projectId);
                         }
                     }}
                     style={{
@@ -410,12 +413,44 @@ export const Tasks: React.FC = () => {
     const [tasks, setTasks] = useState<Task[]>([]);
     const [projects, setProjects] = useState<Project[]>([]);
     const [isAdding, setIsAdding] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
     
     // Kebab menu & Edit state
     const [openMenuId, setOpenMenuId] = useState<string | null>(null);
     const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
     
     const menuRef = useRef<HTMLDivElement>(null);
+
+    // Initial fetch
+    useEffect(() => {
+        const fetchData = async () => {
+            setIsLoading(true);
+            const [projectsRes, tasksRes] = await Promise.all([
+                supabase.from('projects').select('*').order('created_at', { ascending: true }),
+                supabase.from('tasks').select('*').order('created_at', { ascending: true })
+            ]);
+
+            if (projectsRes.data) {
+                setProjects(projectsRes.data.map(p => ({
+                    id: p.id,
+                    name: p.name,
+                    color: p.color
+                })));
+            }
+            if (tasksRes.data) {
+                setTasks(tasksRes.data.map(t => ({
+                    id: t.id,
+                    title: t.title,
+                    note: t.note || '',
+                    estPomodoros: t.est_pomodoros,
+                    completedPomodoros: t.completed_pomodoros,
+                    projectId: t.project_id
+                })));
+            }
+            setIsLoading(false);
+        };
+        fetchData();
+    }, []);
 
     // Close menu when clicking outside
     useEffect(() => {
@@ -428,47 +463,100 @@ export const Tasks: React.FC = () => {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [openMenuId]);
 
-    const handleAddProject = (name: string) => {
-        const newProject: Project = {
-            id: Date.now().toString(),
+    const handleAddProject = async (name: string) => {
+        const newProject = {
             name,
             color: generateRandomColor()
         };
-        setProjects(prev => [...prev, newProject]);
-        return newProject.id;
+        const { data, error } = await supabase.from('projects').insert([newProject]).select().single();
+        if (data && !error) {
+            setProjects(prev => [...prev, { id: data.id, name: data.name, color: data.color }]);
+            return data.id as string;
+        }
+        return undefined;
     };
 
-    const handleDeleteProject = (id: string) => {
-        setProjects(prev => prev.filter(p => p.id !== id));
-        setTasks(prev => prev.map(t => 
-            t.projectId === id ? { ...t, projectId: undefined } : t
-        ));
+    const handleDeleteProject = async (id: string) => {
+        const { error } = await supabase.from('projects').delete().eq('id', id);
+        if (!error) {
+            setProjects(prev => prev.filter(p => p.id !== id));
+            setTasks(prev => prev.map(t => 
+                t.projectId === id ? { ...t, projectId: undefined } : t
+            ));
+        }
     };
 
-    const handleCreateSave = (title: string, note: string, estPomodoros: number, projectId?: string) => {
-        const newTask: Task = {
-            id: Date.now().toString(),
+    const handleCreateSave = async (title: string, note: string, estPomodoros: number, projectId?: string) => {
+        const { data, error } = await supabase.from('tasks').insert([{
             title: title.trim(),
-            note: note.trim(),
-            estPomodoros,
-            completedPomodoros: 0,
-            projectId
-        };
-        setTasks(prev => [...prev, newTask]);
-        setIsAdding(false);
+            note: note.trim() || null,
+            est_pomodoros: estPomodoros,
+            completed_pomodoros: 0,
+            project_id: projectId || null
+        }]).select().single();
+
+        if (data && !error) {
+            const newTask: Task = {
+                id: data.id,
+                title: data.title,
+                note: data.note || '',
+                estPomodoros: data.est_pomodoros,
+                completedPomodoros: data.completed_pomodoros,
+                projectId: data.project_id
+            };
+            setTasks(prev => [...prev, newTask]);
+            setIsAdding(false);
+        }
     };
 
-    const handleUpdateSave = (id: string, newTitle: string, newNote: string, newEst: number, newProjectId?: string) => {
-        setTasks(prev => prev.map(t => 
-            t.id === id ? { ...t, title: newTitle.trim(), note: newNote.trim(), estPomodoros: newEst, projectId: newProjectId } : t
-        ));
-        setEditingTaskId(null);
+    const handleUpdateSave = async (id: string, newTitle: string, newNote: string, newEst: number, newProjectId?: string) => {
+        const { data, error } = await supabase.from('tasks').update({
+            title: newTitle.trim(),
+            note: newNote.trim() || null,
+            est_pomodoros: newEst,
+            project_id: newProjectId || null
+        }).eq('id', id).select().single();
+
+        if (data && !error) {
+            setTasks(prev => prev.map(t => 
+                t.id === id ? {
+                    ...t,
+                    title: data.title,
+                    note: data.note || '',
+                    estPomodoros: data.est_pomodoros,
+                    projectId: data.project_id
+                } : t
+            ));
+            setEditingTaskId(null);
+        }
     };
 
-    const handleDelete = (id: string) => {
-        setTasks(prev => prev.filter(t => t.id !== id));
-        setOpenMenuId(null);
+    const handleDelete = async (id: string) => {
+        const { error } = await supabase.from('tasks').delete().eq('id', id);
+        if (!error) {
+            setTasks(prev => prev.filter(t => t.id !== id));
+            setOpenMenuId(null);
+        }
     };
+
+    if (isLoading) {
+        return (
+            <div style={{
+                width: '100%',
+                maxWidth: '480px',
+                margin: '2rem auto',
+                padding: '0 1rem',
+                boxSizing: 'border-box',
+                fontFamily: '"Space Grotesk", sans-serif',
+                textAlign: 'center',
+                color: 'rgba(255,255,255,0.7)',
+                fontSize: '1.2rem',
+                marginTop: '4rem'
+            }}>
+                Loading tasks...
+            </div>
+        );
+    }
 
     return (
         <div style={{
