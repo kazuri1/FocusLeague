@@ -486,18 +486,22 @@ export const Tasks: React.FC = () => {
             if (!activeTask) return;
 
             const newCount = activeTask.completedPomodoros + 1;
+            const newEstPomodoros = newCount > activeTask.estPomodoros ? newCount : activeTask.estPomodoros;
 
             // Optimistic UI Update
-            setTasks(prev => prev.map(t => t.id === activeTaskId ? { ...t, completedPomodoros: newCount } : t));
+            setTasks(prev => prev.map(t => t.id === activeTaskId ? { ...t, completedPomodoros: newCount, estPomodoros: newEstPomodoros } : t));
 
             const { error } = await supabase
                 .from('tasks')
-                .update({ completed_pomodoros: newCount })
+                .update({ 
+                    completed_pomodoros: newCount,
+                    est_pomodoros: newEstPomodoros
+                })
                 .eq('id', activeTaskId);
 
             if (error) {
                 // Revert on failure
-                setTasks(prev => prev.map(t => t.id === activeTaskId ? { ...t, completedPomodoros: newCount - 1 } : t));
+                setTasks(prev => prev.map(t => t.id === activeTaskId ? { ...t, completedPomodoros: newCount - 1, estPomodoros: activeTask.estPomodoros } : t));
                 console.error("Failed to auto-increment pomodoro count:", error);
             }
         };
