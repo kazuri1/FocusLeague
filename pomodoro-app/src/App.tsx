@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import './App.css';
+import './modules.css';
 import { ModeSelector } from './components/ModeSelector';
 import { TimerDisplay } from './components/TimerDisplay';
 import { Tasks } from './components/Tasks';
@@ -7,6 +8,10 @@ import { Controls } from './components/Controls';
 import { SettingsModal } from './components/SettingsModal';
 import { useMobile } from './hooks/useMobile';
 import type { TimerSettings } from './components/SettingsModal';
+
+import { AppProvider } from './entities/store';
+import { ProjectsModule } from './modules/projects/ProjectsModule';
+import { AnalyticsModule } from './modules/analytics/AnalyticsModule';
 
 /* eslint-disable react-hooks/set-state-in-effect */
 
@@ -29,12 +34,13 @@ const defaultSettings: TimerSettings = {
   longBreakInterval: 4,
 };
 
-function App() {
+function AppContent() {
   const [mode, setMode] = useState<Mode>('pomodoro');
   const [settings, setSettings] = useState<TimerSettings>(defaultSettings);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const isMobile = useMobile();
+  const [currentTab, setCurrentTab] = useState<'focus' | 'tasks' | 'analytics'>('focus');
 
   const getModeTimeSeconds = (currentMode: Mode, currentSettings: TimerSettings) => {
     if (currentMode === 'pomodoro') return currentSettings.pomodoro * 60;
@@ -152,18 +158,103 @@ function App() {
       <div className="background-overlay"></div>
       
       <img src="/logo.png" alt="FocusLeague" className="app-logo" style={{ top: isMobile ? '3rem' : '1.5rem', height: isMobile ? '48px' : '72px' }} />
-      <ModeSelector activeMode={mode} onModeChange={handleModeChange} />
-      <TimerDisplay time={formatTime(timeLeft)} activeMode={mode} />
-      <Controls
-        onStart={togglePlay}
-        onReset={handleReset}
-        onSettings={() => setIsSettingsOpen(true)}
-        isPlaying={isPlaying}
-        hasStarted={timeLeft < getModeTimeSeconds(mode, settings)}
-      />
-      <Tasks />
       
-   
+      {/* Top Center Tab Toggle */}
+      <div style={{
+          position: 'absolute',
+          top: isMobile ? '3rem' : '2.5rem',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          display: 'flex',
+          gap: '0.2rem',
+          background: 'rgba(255, 255, 255, 0.1)',
+          padding: '0.3rem',
+          borderRadius: '30px',
+          zIndex: 50,
+          backdropFilter: 'blur(4px)'
+      }}>
+          <button
+              onClick={() => setCurrentTab('focus')}
+              style={{
+                  background: currentTab === 'focus' ? '#ffffff' : 'transparent',
+                  color: currentTab === 'focus' ? '#000000' : '#ffffff',
+                  border: 'none',
+                  borderRadius: '20px',
+                  padding: '0.5rem 1.5rem',
+                  fontWeight: 600,
+                  fontSize: '0.95rem',
+                  fontFamily: '"Space Grotesk", sans-serif',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+              }}
+          >
+              Focus
+          </button>
+          <button
+              onClick={() => setCurrentTab('tasks')}
+              style={{
+                  background: currentTab === 'tasks' ? '#ffffff' : 'transparent',
+                  color: currentTab === 'tasks' ? '#000000' : '#ffffff',
+                  border: 'none',
+                  borderRadius: '20px',
+                  padding: '0.5rem 1.5rem',
+                  fontWeight: 600,
+                  fontSize: '0.95rem',
+                  fontFamily: '"Space Grotesk", sans-serif',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+              }}
+          >
+              Tasks
+          </button>
+          <button
+              onClick={() => setCurrentTab('analytics')}
+              style={{
+                  background: currentTab === 'analytics' ? '#ffffff' : 'transparent',
+                  color: currentTab === 'analytics' ? '#000000' : '#ffffff',
+                  border: 'none',
+                  borderRadius: '20px',
+                  padding: '0.5rem 1.5rem',
+                  fontWeight: 600,
+                  fontSize: '0.95rem',
+                  fontFamily: '"Space Grotesk", sans-serif',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+              }}
+          >
+              Analytics
+          </button>
+      </div>
+
+      <div style={{ position: 'relative', zIndex: 10, paddingTop: '8rem' }}>
+        {currentTab === 'focus' && (
+          <>
+              <ModeSelector activeMode={mode} onModeChange={handleModeChange} />
+              <TimerDisplay time={formatTime(timeLeft)} activeMode={mode} />
+              <Controls
+                  onStart={togglePlay}
+                  onReset={handleReset}
+                  onSettings={() => setIsSettingsOpen(true)}
+                  isPlaying={isPlaying}
+                  hasStarted={timeLeft < getModeTimeSeconds(mode, settings)}
+              />
+              <Tasks />
+          </>
+        )}
+
+        {currentTab === 'tasks' && (
+          <div className="module-container">
+            <ProjectsModule />
+          </div>
+        )}
+
+        {currentTab === 'analytics' && (
+          <div className="module-container">
+            <AnalyticsModule />
+          </div>
+        )}
+      </div>
+      
       <SettingsModal 
         isOpen={isSettingsOpen} 
         onClose={() => setIsSettingsOpen(false)} 
@@ -171,6 +262,14 @@ function App() {
         onSettingsChange={handleSettingsChange} 
       />
     </div>
+  );
+}
+
+function App() {
+  return (
+    <AppProvider>
+      <AppContent />
+    </AppProvider>
   );
 }
 
