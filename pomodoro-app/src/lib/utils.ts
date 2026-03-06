@@ -1,5 +1,3 @@
-import { clsx } from "clsx"
-
-export function cn(...inputs: any[]) {
-  return clsx(inputs)
+export function cn(...classes: string[]) {
+  return classes.filter(Boolean).join(" ")
 }
