@@ -12,6 +12,7 @@ import type { TimerSettings } from './components/SettingsModal';
 import { AppProvider } from './entities/store';
 import { ProjectsModule } from './modules/projects/ProjectsModule';
 import { AnalyticsModule } from './modules/analytics/AnalyticsModule';
+import { NotificationBell } from './components/NotificationBell';
 
 /* eslint-disable react-hooks/set-state-in-effect */
 
@@ -158,6 +159,7 @@ function AppContent() {
       <div className="background-overlay"></div>
       
       <img src="/logo.png" alt="FocusLeague" className="app-logo" style={{ top: isMobile ? '3rem' : '1.5rem', height: isMobile ? '48px' : '72px' }} />
+      <NotificationBell />
       
       {/* Top Center Tab Toggle */}
       <div style={{
@@ -205,7 +207,7 @@ function AppContent() {
                   transition: 'all 0.2s ease'
               }}
           >
-              Tasks
+              Projects
           </button>
           <button
               onClick={() => setCurrentTab('analytics')}
@@ -226,7 +228,7 @@ function AppContent() {
           </button>
       </div>
 
-      <div style={{ position: 'relative', zIndex: 10, paddingTop: '8rem' }}>
+      <div style={{ position: 'relative', zIndex: 10, paddingTop: '8rem', width: '100%', maxWidth: '1200px' }}>
         {currentTab === 'focus' && (
           <>
               <ModeSelector activeMode={mode} onModeChange={handleModeChange} />

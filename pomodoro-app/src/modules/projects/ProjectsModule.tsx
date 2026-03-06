@@ -1,7 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { TaskCard } from '../../components/taskCard/TaskCard';
+import { TaskForm } from '../../components/Tasks';
 import { X } from 'lucide-react';
+
+const PROJECT_COLORS = [
+  '#e1f5fe', // light blue
+  '#e8f5e9', // light green
+  '#fff3e0', // light orange
+  '#fce4ec', // light pink
+  '#f3e5f5', // light purple
+  '#e0f7fa', // teal
+  '#e8eaf6', // indigo
+];
 
 export const ProjectsModule: React.FC = () => {
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
@@ -9,17 +20,25 @@ export const ProjectsModule: React.FC = () => {
   const [tasks, setTasks] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filterProjectId, setFilterProjectId] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'todo' | 'in-progress' | 'done'>('all');
   const [viewMode, setViewMode] = useState<'table' | 'board'>('table');
 
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectDesc, setNewProjectDesc] = useState('');
+  const [selectedColor, setSelectedColor] = useState<string | null>(null);
 
   const [isCreatingTask, setIsCreatingTask] = useState(false);
-  const [newTaskTitle, setNewTaskTitle] = useState('');
-  const [newTaskPomodoros, setNewTaskPomodoros] = useState(1);
-  const [newTaskDueDate, setNewTaskDueDate] = useState('');
-  const [newTaskScheduledDate, setNewTaskScheduledDate] = useState('');
+  const [editingTaskInModal, setEditingTaskInModal] = useState<any | null>(null);
+  const [isEditingTaskMode, setIsEditingTaskMode] = useState(false);
+
+  const handleTaskClick = (task: any, projectId?: string) => {
+    if (projectId) {
+      setActiveProjectId(projectId);
+    }
+    setEditingTaskInModal(task);
+    setIsEditingTaskMode(false);
+  };
 
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
@@ -44,8 +63,7 @@ export const ProjectsModule: React.FC = () => {
   const activeProjectTasks = tasks.filter(t => t.project_id === activeProjectId);
 
   const generateRandomColor = () => {
-      const colors = ['#e1f5fe', '#e8f5e9', '#fff3e0', '#fce4ec', '#f3e5f5', '#e0f7fa', '#e8eaf6'];
-      return colors[Math.floor(Math.random() * colors.length)];
+      return PROJECT_COLORS[Math.floor(Math.random() * PROJECT_COLORS.length)];
   };
 
   const handleCreateProject = async (e: React.FormEvent) => {
@@ -53,7 +71,7 @@ export const ProjectsModule: React.FC = () => {
     if (newProjectName.trim()) {
       const newProject = {
           name: newProjectName.trim(),
-          color: generateRandomColor()
+          color: selectedColor || generateRandomColor()
       };
       const { data, error } = await supabase.from('projects').insert([newProject]).select().single();
       if (data && !error) {
@@ -61,31 +79,72 @@ export const ProjectsModule: React.FC = () => {
       }
       setNewProjectName('');
       setNewProjectDesc('');
+      setSelectedColor(null);
       setIsCreatingProject(false);
     }
   };
 
-  const handleCreateTask = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newTaskTitle.trim() && activeProjectId) {
-      const newTask = {
-          title: newTaskTitle.trim(),
-          est_pomodoros: newTaskPomodoros,
-          completed_pomodoros: 0,
-          is_completed: false,
-          project_id: activeProjectId,
-          due_date: newTaskDueDate || null,
-          scheduled_date: newTaskScheduledDate || null
-      };
-      const { data, error } = await supabase.from('tasks').insert([newTask]).select().single();
-      if (data && !error) {
-          setTasks(prev => [...prev, data]);
-      }
-      setNewTaskTitle('');
-      setNewTaskPomodoros(1);
-      setNewTaskDueDate('');
-      setNewTaskScheduledDate('');
+  const handleCreateTaskFromModal = async (
+    title: string,
+    note: string,
+    estPomodoros: number
+  ) => {
+    if (!activeProjectId || !title.trim()) return;
+
+    const newTask = {
+      title: title.trim(),
+      note: note.trim() || null,
+      est_pomodoros: estPomodoros,
+      completed_pomodoros: 0,
+      is_completed: false,
+      project_id: activeProjectId,
+      due_date: null as string | null,
+      scheduled_date: null as string | null,
+    };
+
+    const { data, error } = await supabase.from('tasks').insert([newTask]).select().single();
+    if (data && !error) {
+      setTasks(prev => [...prev, data]);
       setIsCreatingTask(false);
+    }
+  };
+
+  const handleUpdateTaskFromModal = async (
+    title: string,
+    note: string,
+    estPomodoros: number,
+    projectId?: string,
+    scheduledDate?: string,
+    dueDate?: string
+  ) => {
+    if (!editingTaskInModal) return;
+
+    const updates: any = {
+      title: title.trim(),
+      note: note.trim() || null,
+      est_pomodoros: estPomodoros,
+      project_id: projectId || null,
+      scheduled_date: scheduledDate || null,
+      due_date: dueDate || null,
+    };
+
+    const { data, error } = await supabase
+      .from('tasks')
+      .update(updates)
+      .eq('id', editingTaskInModal.id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error(error);
+      alert(`Failed to save task: ${error.message || 'Database error occurred'}`);
+      return;
+    }
+
+    if (data) {
+      setTasks(prev => prev.map(t => (t.id === data.id ? data : t)));
+      setActiveProjectId(data.project_id || null);
+      setEditingTaskInModal(null);
     }
   };
 
@@ -173,6 +232,118 @@ export const ProjectsModule: React.FC = () => {
           </div>
 
           <div>
+            {editingTaskInModal && !isEditingTaskMode && (
+              <div style={{ marginBottom: '2rem', padding: '1.5rem', background: '#f8f9fa', borderRadius: '12px', border: '1px solid #eaeaea' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+                  <h2 style={{ margin: 0, color: '#2c3e50', fontSize: '1.5rem' }}>{editingTaskInModal.title}</h2>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button 
+                      onClick={() => setIsEditingTaskMode(true)}
+                      className="btn-secondary"
+                      style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
+                    >
+                      Edit
+                    </button>
+                    <button 
+                      onClick={async () => {
+                        if (confirm('Are you sure you want to delete this task?')) {
+                          const { error } = await supabase.from('tasks').delete().eq('id', editingTaskInModal.id);
+                          if (!error) {
+                            setTasks(prev => prev.filter(t => t.id !== editingTaskInModal.id));
+                            setEditingTaskInModal(null);
+                          } else {
+                            alert('Failed to delete task. Please try again.');
+                          }
+                        }
+                      }}
+                      className="btn-secondary"
+                      style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem', color: '#ff4d4f', borderColor: '#ffccc7', background: '#fff' }}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem', fontSize: '0.95rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={{ fontWeight: 600, color: '#666', width: '100px' }}>Status:</span>
+                        {editingTaskInModal.is_completed ? (
+                            <span className="badge badge-completed">Done</span>
+                        ) : editingTaskInModal.completed_pomodoros > 0 ? (
+                            <span className="badge badge-running">In Progress</span>
+                        ) : (
+                            <span className="badge badge-draft">To Do</span>
+                        )}
+                    </div>
+                    
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={{ fontWeight: 600, color: '#666', width: '100px' }}>Progress:</span>
+                        <span>🍅 {editingTaskInModal.completed_pomodoros} / {editingTaskInModal.est_pomodoros} Pomodoros</span>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span style={{ fontWeight: 600, color: '#666', width: '100px' }}>Dates:</span>
+                        <div style={{ display: 'flex', gap: '1rem', color: '#555' }}>
+                            <span><strong>Scheduled:</strong> {editingTaskInModal.scheduled_date ? new Date(editingTaskInModal.scheduled_date).toLocaleDateString() : 'None'}</span>
+                            <span><strong>Due:</strong> {editingTaskInModal.due_date ? new Date(editingTaskInModal.due_date).toLocaleDateString() : 'None'}</span>
+                        </div>
+                    </div>
+                    
+                    {editingTaskInModal.note && (
+                      <div style={{ marginTop: '0.5rem' }}>
+                          <span style={{ fontWeight: 600, color: '#666', display: 'block', marginBottom: '0.3rem' }}>Notes:</span>
+                          <p style={{ margin: 0, padding: '0.8rem', background: '#fff', borderRadius: '8px', border: '1px solid #eee', whiteSpace: 'pre-wrap', color: '#444' }}>
+                              {editingTaskInModal.note}
+                          </p>
+                      </div>
+                    )}
+                </div>
+              </div>
+            )}
+
+            {editingTaskInModal && isEditingTaskMode && (
+              <div style={{ marginBottom: '2rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                  <h2 style={{ margin: 0 }}>Edit Task</h2>
+                  <button onClick={() => setIsEditingTaskMode(false)} style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer', fontSize: '0.85rem', textDecoration: 'underline' }}>
+                    Cancel Edit
+                  </button>
+                </div>
+                <TaskForm
+                  initialTitle={editingTaskInModal.title}
+                  initialNote={editingTaskInModal.note || ''}
+                  initialEstPomodoros={editingTaskInModal.est_pomodoros}
+                  initialProjectId={editingTaskInModal.project_id || undefined}
+                  disableTitleEditing
+                  projects={projects}
+                  onAddProject={async (name: string) => {
+                    const newProject = {
+                      name: name.trim(),
+                      color: generateRandomColor(),
+                    };
+                    const { data, error } = await supabase
+                      .from('projects')
+                      .insert([newProject])
+                      .select()
+                      .single();
+                    if (data && !error) {
+                      setProjects(prev => [...prev, data]);
+                      return data.id as string;
+                    }
+                    return undefined;
+                  }}
+                  onDeleteProject={async (id: string) => {
+                    const { error } = await supabase.from('projects').delete().eq('id', id);
+                    if (!error) {
+                      setProjects(prev => prev.filter(p => p.id !== id));
+                    }
+                  }}
+                  onSave={handleUpdateTaskFromModal}
+                  onCancel={() => setIsEditingTaskMode(false)}
+                />
+              </div>
+            )}
+
             <div className="tasks-header">
               <h2>Project Tasks</h2>
               {!isCreatingTask && (
@@ -186,61 +357,36 @@ export const ProjectsModule: React.FC = () => {
             </div>
 
             {isCreatingTask && (
-              <form onSubmit={handleCreateTask} className="projects-create-form">
-                <label className="form-label">Task Title</label>
-                <div className="form-input-group">
-                  <input
-                    type="text"
-                    value={newTaskTitle}
-                    onChange={(e) => setNewTaskTitle(e.target.value)}
-                    placeholder="E.g., Design database schema..."
-                    className="form-input"
-                    autoFocus
-                  />
-                  <input
-                    type="number"
-                    min="1"
-                    max="10"
-                    value={newTaskPomodoros}
-                    onChange={(e) => setNewTaskPomodoros(parseInt(e.target.value))}
-                    className="form-input"
-                    style={{ maxWidth: '100px' }}
-                  />
-                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                       <label style={{ fontSize: '0.75rem', color: '#888', marginBottom: '0.2rem' }}>Scheduled</label>
-                       <input
-                         type="date"
-                         value={newTaskScheduledDate}
-                         onChange={(e) => setNewTaskScheduledDate(e.target.value)}
-                         className="form-input"
-                         style={{ padding: '0.4rem' }}
-                       />
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                       <label style={{ fontSize: '0.75rem', color: '#888', marginBottom: '0.2rem' }}>Due</label>
-                       <input
-                         type="date"
-                         value={newTaskDueDate}
-                         onChange={(e) => setNewTaskDueDate(e.target.value)}
-                         className="form-input"
-                         style={{ padding: '0.4rem' }}
-                       />
-                    </div>
-                  </div>
-                  <button type="submit" className="btn-primary" style={{ marginTop: 'auto' }} disabled={!newTaskTitle.trim()}>
-                    Add
-                  </button>
-                  <button 
-                    type="button" 
-                    className="btn-secondary"
-                    style={{ marginTop: 'auto' }}
-                    onClick={() => setIsCreatingTask(false)}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
+              <div style={{ marginBottom: '1.5rem' }}>
+                <TaskForm
+                  initialProjectId={activeProjectId || undefined}
+                  projects={projects}
+                  onAddProject={async (name: string) => {
+                    const newProject = {
+                      name: name.trim(),
+                      color: generateRandomColor(),
+                    };
+                    const { data, error } = await supabase
+                      .from('projects')
+                      .insert([newProject])
+                      .select()
+                      .single();
+                    if (data && !error) {
+                      setProjects(prev => [...prev, data]);
+                      return data.id as string;
+                    }
+                    return undefined;
+                  }}
+                  onDeleteProject={async (id: string) => {
+                    const { error } = await supabase.from('projects').delete().eq('id', id);
+                    if (!error) {
+                      setProjects(prev => prev.filter(p => p.id !== id));
+                    }
+                  }}
+                  onSave={handleCreateTaskFromModal}
+                  onCancel={() => setIsCreatingTask(false)}
+                />
+              </div>
             )}
 
             {activeProjectTasks.length === 0 && !isCreatingTask ? (
@@ -274,21 +420,34 @@ export const ProjectsModule: React.FC = () => {
     <div className="projects-module">
       <div className="projects-header" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '2rem' }}>
         <div className="projects-title-container">
-          <h1>Tasks</h1>
-          <p>Organize and track your individual tasks.</p>
+          <h1>Projects</h1>
+          <p>Organize your projects and the tasks inside them.</p>
         </div>
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
           <select 
             value={filterProjectId} 
             onChange={e => setFilterProjectId(e.target.value)}
             className="form-input"
-            style={{ minWidth: '150px', cursor: 'pointer' }}
+            style={{ width: '150px', cursor: 'pointer', flex: 'none' }}
           >
             <option value="all">All Projects</option>
             {projects.map(p => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
+          {viewMode === 'table' && (
+            <select
+              value={filterStatus}
+              onChange={e => setFilterStatus(e.target.value as any)}
+              className="form-input"
+              style={{ width: '130px', cursor: 'pointer', flex: 'none' }}
+            >
+              <option value="all">All Status</option>
+              <option value="todo">To Do</option>
+              <option value="in-progress">In Progress</option>
+              <option value="done">Done</option>
+            </select>
+          )}
           <div style={{ display: 'flex', background: 'rgba(255,255,255,0.1)', borderRadius: '8px', padding: '0.2rem' }}>
             <button
                 onClick={() => setViewMode('table')}
@@ -357,11 +516,37 @@ export const ProjectsModule: React.FC = () => {
               />
             </div>
           </div>
+
+          <div style={{ marginTop: '1rem' }}>
+            <label className="form-label">Project Color</label>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              {PROJECT_COLORS.map(color => (
+                <button
+                  key={color}
+                  type="button"
+                  onClick={() => setSelectedColor(color)}
+                  style={{
+                    width: '28px',
+                    height: '28px',
+                    borderRadius: '9999px',
+                    border: selectedColor === color ? '2px solid #fff' : '2px solid transparent',
+                    boxShadow: selectedColor === color ? '0 0 0 2px rgba(255,255,255,0.5)' : '0 1px 3px rgba(0,0,0,0.2)',
+                    backgroundColor: color,
+                    cursor: 'pointer',
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+
           <div className="form-actions">
             <button 
               type="button" 
               className="btn-secondary"
-              onClick={() => setIsCreatingProject(false)}
+              onClick={() => {
+                setIsCreatingProject(false);
+                setSelectedColor(null);
+              }}
             >
               Cancel
             </button>
@@ -390,8 +575,8 @@ export const ProjectsModule: React.FC = () => {
           <table className="projects-table">
             <thead>
               <tr>
-                <th>Task Title ↓</th>
                 <th>Project</th>
+                <th>Task Title ↓</th>
                 <th>Scheduled</th>
                 <th>Due</th>
                 <th>Status</th>
@@ -402,7 +587,18 @@ export const ProjectsModule: React.FC = () => {
             </thead>
             <tbody>
               {tasks
-                .filter(task => filterProjectId === 'all' || task.project_id === filterProjectId)
+                .filter(task => {
+                  if (filterProjectId !== 'all' && task.project_id !== filterProjectId) return false;
+                  if (filterStatus === 'todo' && (task.is_completed || task.completed_pomodoros > 0)) return false;
+                  if (filterStatus === 'in-progress' && (task.is_completed || task.completed_pomodoros === 0)) return false;
+                  if (filterStatus === 'done' && !task.is_completed) return false;
+                  return true;
+                })
+                .sort((a, b) => {
+                  if (a.is_completed && !b.is_completed) return 1;
+                  if (!a.is_completed && b.is_completed) return -1;
+                  return 0;
+                })
                 .map(task => {
                 const project = projects.find(p => p.id === task.project_id);
                 
@@ -424,19 +620,9 @@ export const ProjectsModule: React.FC = () => {
                 return (
                   <tr 
                     key={task.id} 
-                    onClick={() => project && setActiveProjectId(project.id)}
-                    style={{ cursor: project ? 'pointer' : 'default' }}
+                    onClick={() => handleTaskClick(task, project?.id)}
+                    style={{ cursor: 'pointer' }}
                   >
-                    <td>
-                      <div className="project-name-cell">
-                        <div>
-                          <div className="project-name" style={{ textDecoration: task.is_completed ? 'line-through' : 'none', color: task.is_completed ? '#888' : 'inherit' }}>
-                              {task.title}
-                          </div>
-                          <div className="project-date">{dateString}</div>
-                        </div>
-                      </div>
-                    </td>
                     <td>
                         {project ? (
                             <span style={{
@@ -446,13 +632,28 @@ export const ProjectsModule: React.FC = () => {
                                 fontSize: '0.75rem',
                                 fontWeight: 700,
                                 color: '#444',
-                                display: 'inline-block'
+                                display: 'inline-block',
+                                width: '120px',
+                                textAlign: 'center',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis'
                             }}>
                                 {project.name}
                             </span>
                         ) : (
                             <span style={{ color: '#666', fontSize: '0.85rem' }}>No Project</span>
                         )}
+                    </td>
+                    <td>
+                      <div className="project-name-cell">
+                        <div>
+                          <div className="project-name" style={{ textDecoration: task.is_completed ? 'line-through' : 'none', color: task.is_completed ? '#888' : 'inherit' }}>
+                              {task.title}
+                          </div>
+                          <div className="project-date">{dateString}</div>
+                        </div>
+                      </div>
                     </td>
                     <td style={{ color: '#999', fontSize: '0.9rem' }}>
                         {task.scheduled_date ? new Date(task.scheduled_date).toLocaleDateString() : '-'}
@@ -526,8 +727,8 @@ export const ProjectsModule: React.FC = () => {
                         onDragStart={(e) => handleDragStart(e, task.id)}
                         onDragEnd={handleDragEnd}
                         onClick={() => {
-                          if (draggingId !== task.id && project) {
-                            setActiveProjectId(project.id);
+                          if (draggingId !== task.id) {
+                            handleTaskClick(task, project?.id);
                           }
                         }}
                       >

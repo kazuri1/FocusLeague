@@ -5,6 +5,7 @@ import MoreVertIcon from '@mui/icons-material/MoreVert';
 import ArrowDropUpIcon from '@mui/icons-material/ArrowDropUp';
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 
 interface Project {
     id: string;
@@ -20,6 +21,8 @@ interface Task {
     completedPomodoros: number;
     isCompleted: boolean;
     projectId?: string;
+    scheduledDate?: string;
+    dueDate?: string;
 }
 
 interface TaskFormProps {
@@ -27,8 +30,11 @@ interface TaskFormProps {
     initialNote?: string;
     initialEstPomodoros?: number;
     initialProjectId?: string;
+    initialScheduledDate?: string;
+    initialDueDate?: string;
+    disableTitleEditing?: boolean;
     projects: Project[];
-    onSave: (title: string, note: string, estPomodoros: number, projectId?: string) => Promise<void>;
+    onSave: (title: string, note: string, estPomodoros: number, projectId?: string, scheduledDate?: string, dueDate?: string) => Promise<void>;
     onCancel: () => void;
     onAddProject: (name: string) => Promise<string | undefined>;
     onDeleteProject: (id: string) => Promise<void>;
@@ -39,11 +45,14 @@ const generateRandomColor = () => {
     return colors[Math.floor(Math.random() * colors.length)];
 };
 
-const TaskForm: React.FC<TaskFormProps> = ({
+export const TaskForm: React.FC<TaskFormProps> = ({
     initialTitle = '',
     initialNote = '',
     initialEstPomodoros = 1,
     initialProjectId,
+    initialScheduledDate = '',
+    initialDueDate = '',
+    disableTitleEditing = false,
     projects,
     onSave,
     onCancel,
@@ -55,6 +64,8 @@ const TaskForm: React.FC<TaskFormProps> = ({
     const [isNoteOpen, setIsNoteOpen] = useState(!!initialNote);
     const [estPomodoros, setEstPomodoros] = useState(initialEstPomodoros);
     const [projectId, setProjectId] = useState<string | undefined>(initialProjectId);
+    const [scheduledDate, setScheduledDate] = useState(initialScheduledDate);
+    const [dueDate, setDueDate] = useState(initialDueDate);
     
     const [isProjectMenuOpen, setIsProjectMenuOpen] = useState(false);
     const [newProjectName, setNewProjectName] = useState('');
@@ -104,7 +115,12 @@ const TaskForm: React.FC<TaskFormProps> = ({
                     className="task-title-input"
                     placeholder="What are you working on?"
                     value={title}
-                    onChange={(e) => setTitle(e.target.value)}
+                    onChange={(e) => {
+                        if (!disableTitleEditing) {
+                            setTitle(e.target.value);
+                        }
+                    }}
+                    readOnly={disableTitleEditing}
                     style={{
                         width: '100%',
                         border: 'none',
@@ -201,6 +217,33 @@ const TaskForm: React.FC<TaskFormProps> = ({
                     >
                         <ArrowDropDownIcon />
                     </button>
+                </div>
+
+                <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem' }}>
+                    <div style={{ flex: 1 }}>
+                        <label style={{ display: 'block', fontWeight: 700, color: '#555', fontSize: '0.9rem', marginBottom: '0.5rem' }}>Scheduled Date</label>
+                        <div className="date-input-wrapper date-input-light-wrapper">
+                            <CalendarTodayIcon className="date-input-icon" style={{ fontSize: '1.2rem' }} />
+                            <input
+                                type="date"
+                                className="date-input-styled date-input-light"
+                                value={scheduledDate}
+                                onChange={(e) => setScheduledDate(e.target.value)}
+                            />
+                        </div>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                        <label style={{ display: 'block', fontWeight: 700, color: '#555', fontSize: '0.9rem', marginBottom: '0.5rem' }}>Due Date</label>
+                        <div className="date-input-wrapper date-input-light-wrapper">
+                            <CalendarTodayIcon className="date-input-icon" style={{ fontSize: '1.2rem' }} />
+                            <input
+                                type="date"
+                                className="date-input-styled date-input-light"
+                                value={dueDate}
+                                onChange={(e) => setDueDate(e.target.value)}
+                            />
+                        </div>
+                    </div>
                 </div>
 
                 {isProjectMenuOpen && !selectedProject && (
@@ -392,7 +435,7 @@ const TaskForm: React.FC<TaskFormProps> = ({
                 <button 
                     onClick={async () => {
                         if (title.trim()) {
-                            await onSave(title, note, estPomodoros, projectId);
+                            await onSave(title, note, estPomodoros, projectId, scheduledDate, dueDate);
                         }
                     }}
                     style={{
@@ -454,7 +497,9 @@ export const Tasks: React.FC = () => {
                     estPomodoros: t.est_pomodoros,
                     completedPomodoros: t.completed_pomodoros,
                     isCompleted: t.is_completed || false,
-                    projectId: t.project_id
+                    projectId: t.project_id,
+                    scheduledDate: t.scheduled_date || '',
+                    dueDate: t.due_date || ''
                 }));
                 setTasks(fetchedTasks);
                 if (fetchedTasks.length > 0 && !activeTaskId) {
@@ -533,17 +578,25 @@ export const Tasks: React.FC = () => {
         }
     };
 
-    const handleCreateSave = async (title: string, note: string, estPomodoros: number, projectId?: string) => {
+    const handleCreateSave = async (title: string, note: string, estPomodoros: number, projectId?: string, scheduledDate?: string, dueDate?: string) => {
         const { data, error } = await supabase.from('tasks').insert([{
             title: title.trim(),
             note: note.trim() || null,
             est_pomodoros: estPomodoros,
             completed_pomodoros: 0,
             is_completed: false,
-            project_id: projectId || null
+            project_id: projectId || null,
+            scheduled_date: scheduledDate || null,
+            due_date: dueDate || null
         }]).select().single();
 
-        if (data && !error) {
+        if (error) {
+            console.error(error);
+            alert(`Failed to save task: ${error.message || 'Database error occurred'}`);
+            return;
+        }
+
+        if (data) {
             const newTask: Task = {
                 id: data.id,
                 title: data.title,
@@ -551,7 +604,9 @@ export const Tasks: React.FC = () => {
                 estPomodoros: data.est_pomodoros,
                 completedPomodoros: data.completed_pomodoros,
                 isCompleted: data.is_completed || false,
-                projectId: data.project_id
+                projectId: data.project_id,
+                scheduledDate: data.scheduled_date || '',
+                dueDate: data.due_date || ''
             };
             setTasks(prev => [...prev, newTask]);
             setIsAdding(false);
@@ -561,22 +616,32 @@ export const Tasks: React.FC = () => {
         }
     };
 
-    const handleUpdateSave = async (id: string, newTitle: string, newNote: string, newEst: number, newProjectId?: string) => {
+    const handleUpdateSave = async (id: string, newTitle: string, newNote: string, newEst: number, newProjectId?: string, newScheduled?: string, newDue?: string) => {
         const { data, error } = await supabase.from('tasks').update({
             title: newTitle.trim(),
             note: newNote.trim() || null,
             est_pomodoros: newEst,
-            project_id: newProjectId || null
+            project_id: newProjectId || null,
+            scheduled_date: newScheduled || null,
+            due_date: newDue || null
         }).eq('id', id).select().single();
 
-        if (data && !error) {
+        if (error) {
+            console.error(error);
+            alert(`Failed to save task: ${error.message || 'Database error occurred'}`);
+            return;
+        }
+
+        if (data) {
             setTasks(prev => prev.map(t => 
                 t.id === id ? {
                     ...t,
                     title: data.title,
                     note: data.note || '',
                     estPomodoros: data.est_pomodoros,
-                    projectId: data.project_id
+                    projectId: data.project_id,
+                    scheduledDate: data.scheduled_date || '',
+                    dueDate: data.due_date || ''
                 } : t
             ));
             setEditingTaskId(null);
@@ -721,10 +786,12 @@ export const Tasks: React.FC = () => {
                                 initialNote={task.note}
                                 initialEstPomodoros={task.estPomodoros}
                                 initialProjectId={task.projectId}
+                                initialScheduledDate={task.scheduledDate}
+                                initialDueDate={task.dueDate}
                                 projects={projects}
                                 onAddProject={handleAddProject}
                                 onDeleteProject={handleDeleteProject}
-                                onSave={(title, note, est, projId) => handleUpdateSave(task.id, title, note, est, projId)}
+                                onSave={(title, note, est, projId, sched, due) => handleUpdateSave(task.id, title, note, est, projId, sched, due)}
                                 onCancel={() => setEditingTaskId(null)}
                             />
                         );
