@@ -36,8 +36,13 @@ const defaultSettings: TimerSettings = {
 };
 
 function AppContent() {
-  const [mode, setMode] = useState<Mode>('pomodoro');
-  const [settings, setSettings] = useState<TimerSettings>(defaultSettings);
+  const [mode, setMode] = useState<Mode>(() => {
+    return (localStorage.getItem('pomodoro_app_mode') as Mode) || 'pomodoro';
+  });
+  const [settings, setSettings] = useState<TimerSettings>(() => {
+    const saved = localStorage.getItem('pomodoro_app_settings');
+    return saved ? JSON.parse(saved) : defaultSettings;
+  });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const isMobile = useMobile();
@@ -49,9 +54,37 @@ function AppContent() {
     return currentSettings.longBreak * 60;
   };
 
-  const [timeLeft, setTimeLeft] = useState<number>(getModeTimeSeconds('pomodoro', defaultSettings));
-  const [isPlaying, setIsPlaying] = useState<boolean>(false);
-  const [pomodorosCompleted, setPomodorosCompleted] = useState<number>(0);
+  const [timeLeft, setTimeLeft] = useState<number>(() => {
+    const saved = localStorage.getItem('pomodoro_app_timeLeft');
+    const lastTick = localStorage.getItem('pomodoro_app_lastTick');
+    const isRun = localStorage.getItem('pomodoro_app_isPlaying') === 'true';
+    if (saved) {
+      const parsedTime = parseInt(saved, 10);
+      if (isRun && lastTick) {
+        const elapsed = Math.floor((Date.now() - parseInt(lastTick, 10)) / 1000);
+        return Math.max(0, parsedTime - elapsed);
+      }
+      return parsedTime;
+    }
+    const currentMode = (localStorage.getItem('pomodoro_app_mode') as Mode) || 'pomodoro';
+    const currentSettingsStr = localStorage.getItem('pomodoro_app_settings');
+    const currentSettings = currentSettingsStr ? JSON.parse(currentSettingsStr) : defaultSettings;
+    return getModeTimeSeconds(currentMode, currentSettings);
+  });
+  const [isPlaying, setIsPlaying] = useState<boolean>(() => localStorage.getItem('pomodoro_app_isPlaying') === 'true');
+  const [pomodorosCompleted, setPomodorosCompleted] = useState<number>(() => {
+    const saved = localStorage.getItem('pomodoro_app_completedCount');
+    return saved ? parseInt(saved, 10) : 0;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('pomodoro_app_mode', mode);
+    localStorage.setItem('pomodoro_app_settings', JSON.stringify(settings));
+    localStorage.setItem('pomodoro_app_timeLeft', timeLeft.toString());
+    localStorage.setItem('pomodoro_app_lastTick', Date.now().toString());
+    localStorage.setItem('pomodoro_app_isPlaying', isPlaying.toString());
+    localStorage.setItem('pomodoro_app_completedCount', pomodorosCompleted.toString());
+  }, [mode, settings, timeLeft, isPlaying, pomodorosCompleted]);
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
@@ -118,7 +151,14 @@ function AppContent() {
     setIsPlaying(false);
   };
 
-  const togglePlay = () => setIsPlaying(!isPlaying);
+  const togglePlay = () => {
+    const activeTaskId = localStorage.getItem('fl_activeTaskId');
+    if (!activeTaskId && mode === 'pomodoro') {
+      alert('Please select a task before starting a pomorodo session');
+      return;
+    }
+    setIsPlaying(!isPlaying);
+  };
 
   const handleReset = () => {
     setIsPlaying(false);

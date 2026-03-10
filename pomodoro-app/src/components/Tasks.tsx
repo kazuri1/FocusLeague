@@ -465,7 +465,17 @@ export const Tasks: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     
     // Active task state
-    const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+    const [activeTaskId, setActiveTaskId] = useState<string | null>(() => {
+        return localStorage.getItem('fl_activeTaskId');
+    });
+
+    useEffect(() => {
+        if (activeTaskId) {
+            localStorage.setItem('fl_activeTaskId', activeTaskId);
+        } else {
+            localStorage.removeItem('fl_activeTaskId');
+        }
+    }, [activeTaskId]);
     
     // Kebab menu & Edit state
     const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -473,13 +483,29 @@ export const Tasks: React.FC = () => {
     
     const menuRef = useRef<HTMLDivElement>(null);
 
+    const cleanupOldCompletedTasks = async (currentTasks: any[]) => {
+        const completedTasks = currentTasks.filter(t => t.isCompleted);
+        completedTasks.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+        
+        if (completedTasks.length > 5) {
+            const idsToDelete = completedTasks.slice(5).map(t => t.id);
+            const { error } = await supabase.from('tasks').delete().in('id', idsToDelete);
+            if (!error) {
+                setTasks(prev => prev.filter(t => !idsToDelete.includes(t.id)));
+                if (activeTaskId && idsToDelete.includes(activeTaskId)) {
+                    setActiveTaskId(null);
+                }
+            }
+        }
+    };
+
     // Initial fetch
     useEffect(() => {
         const fetchData = async () => {
             setIsLoading(true);
             const [projectsRes, tasksRes] = await Promise.all([
                 supabase.from('projects').select('*').order('created_at', { ascending: true }),
-                supabase.from('tasks').select('*').order('created_at', { ascending: true })
+                supabase.from('tasks').select('*').order('created_at', { ascending: false })
             ]);
 
             if (projectsRes.data) {
@@ -499,11 +525,19 @@ export const Tasks: React.FC = () => {
                     isCompleted: t.is_completed || false,
                     projectId: t.project_id,
                     scheduledDate: t.scheduled_date || '',
-                    dueDate: t.due_date || ''
+                    dueDate: t.due_date || '',
+                    createdAt: t.created_at
                 }));
-                setTasks(fetchedTasks);
-                if (fetchedTasks.length > 0 && !activeTaskId) {
-                    setActiveTaskId(fetchedTasks[0].id);
+                setTasks(fetchedTasks as any);
+                cleanupOldCompletedTasks(fetchedTasks);
+                
+                const activeId = localStorage.getItem('fl_activeTaskId');
+                if (activeId) {
+                    const taskStillValid = fetchedTasks.some(t => t.id === activeId && !t.isCompleted);
+                    if (!taskStillValid) {
+                        setActiveTaskId(null);
+                        localStorage.removeItem('fl_activeTaskId');
+                    }
                 }
             }
             setIsLoading(false);
@@ -668,7 +702,8 @@ export const Tasks: React.FC = () => {
         const newStatus = !task.isCompleted;
         
         // Optimistic UI Update
-        setTasks(prev => prev.map(t => t.id === task.id ? { ...t, isCompleted: newStatus } : t));
+        const updatedTasks = tasks.map(t => t.id === task.id ? { ...t, isCompleted: newStatus } : t);
+        setTasks(updatedTasks);
         if (newStatus && activeTaskId === task.id) {
             const nextActiveId = tasks.find(t => t.id !== task.id && !t.isCompleted)?.id;
             setActiveTaskId(nextActiveId || null);
@@ -681,6 +716,8 @@ export const Tasks: React.FC = () => {
             setTasks(prev => prev.map(t => t.id === task.id ? { ...t, isCompleted: !newStatus } : t));
             console.error("Error toggling completion:", error);
             alert("Database Error! Did you make sure to create the `is_completed` column in Supabase? Details: " + error.message);
+        } else if (newStatus) {
+            cleanupOldCompletedTasks(updatedTasks as any[]);
         }
     };
 
@@ -801,7 +838,7 @@ export const Tasks: React.FC = () => {
 
                     return (
                         <div key={task.id} 
-                            onClick={() => setActiveTaskId(task.id)}
+                            onClick={() => setActiveTaskId(prev => prev === task.id ? null : task.id)}
                             style={{
                             backgroundColor: '#ffffff',
                             borderRadius: '4px',

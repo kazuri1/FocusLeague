@@ -10,8 +10,31 @@ const POMODORO_SECONDS = POMODORO_MINUTES * 60;
 
 export const Timer: React.FC<TimerProps> = ({ task }) => {
   const { addSession } = useAppStore();
-  const [timeLeft, setTimeLeft] = useState(POMODORO_SECONDS);
-  const [isRunning, setIsRunning] = useState(false);
+  
+  const [timeLeft, setTimeLeft] = useState(() => {
+    const saved = localStorage.getItem('pomodoro_timeLeft');
+    const lastTick = localStorage.getItem('pomodoro_lastTick');
+    const isRun = localStorage.getItem('pomodoro_isRunning') === 'true';
+    if (saved) {
+      const parsedTime = parseInt(saved, 10);
+      if (isRun && lastTick) {
+         const elapsed = Math.floor((Date.now() - parseInt(lastTick, 10)) / 1000);
+         return Math.max(0, parsedTime - elapsed);
+      }
+      return parsedTime;
+    }
+    return POMODORO_SECONDS;
+  });
+
+  const [isRunning, setIsRunning] = useState(() => {
+    return localStorage.getItem('pomodoro_isRunning') === 'true';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('pomodoro_timeLeft', timeLeft.toString());
+    localStorage.setItem('pomodoro_lastTick', Date.now().toString());
+    localStorage.setItem('pomodoro_isRunning', isRunning.toString());
+  }, [timeLeft, isRunning]);
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
@@ -36,7 +59,10 @@ export const Timer: React.FC<TimerProps> = ({ task }) => {
   }, [isRunning, timeLeft, task, addSession]);
 
   const toggleTimer = () => {
-    if (!task) return; // Cannot start without a task
+    if (!task) {
+        alert('Please select a task before starting a pomorodo session');
+        return;
+    }
     setIsRunning(!isRunning);
   };
 
@@ -47,7 +73,6 @@ export const Timer: React.FC<TimerProps> = ({ task }) => {
   };
 
   let btnClass = isRunning ? "timer-btn timer-btn-pause" : "timer-btn timer-btn-start";
-  if (!task) btnClass = "timer-btn timer-btn-disabled";
 
   return (
     <div className="timer-container">
@@ -56,7 +81,6 @@ export const Timer: React.FC<TimerProps> = ({ task }) => {
       </div>
       <button
         onClick={toggleTimer}
-        disabled={!task}
         className={btnClass}
       >
         {isRunning ? 'Pause' : 'Start Focus'}
