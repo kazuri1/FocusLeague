@@ -21,7 +21,7 @@ export const ProjectsModule: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [filterProjectId, setFilterProjectId] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<'all' | 'todo' | 'in-progress' | 'done'>('all');
-  const [viewMode, setViewMode] = useState<'table' | 'board'>('table');
+  const [viewMode, setViewMode] = useState<'table' | 'board'>('board');
 
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
@@ -43,17 +43,33 @@ export const ProjectsModule: React.FC = () => {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
 
+  const cleanupOldCompletedTasks = async (currentTasks: any[]) => {
+    const completedTasks = currentTasks.filter(t => t.is_completed);
+    completedTasks.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    
+    if (completedTasks.length > 5) {
+      const idsToDelete = completedTasks.slice(5).map(t => t.id);
+      const { error } = await supabase.from('tasks').delete().in('id', idsToDelete);
+      if (!error) {
+        setTasks(prev => prev.filter(t => !idsToDelete.includes(t.id)));
+      }
+    }
+  };
+
   // Fetch data on mount
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
       const [projectsRes, tasksRes] = await Promise.all([
         supabase.from('projects').select('*').order('created_at', { ascending: true }),
-        supabase.from('tasks').select('*').order('created_at', { ascending: true })
+        supabase.from('tasks').select('*').order('created_at', { ascending: false })
       ]);
 
       if (projectsRes.data) setProjects(projectsRes.data);
-      if (tasksRes.data) setTasks(tasksRes.data);
+      if (tasksRes.data) {
+        setTasks(tasksRes.data);
+        cleanupOldCompletedTasks(tasksRes.data);
+      }
       setIsLoading(false);
     };
     fetchData();
@@ -196,10 +212,14 @@ export const ProjectsModule: React.FC = () => {
     }
 
     // Optimistic UI update
-    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updates } : t));
+    const updatedTasks = tasks.map(t => t.id === taskId ? { ...t, ...updates } : t);
+    setTasks(updatedTasks);
 
     // Database update
-    await supabase.from('tasks').update(updates).eq('id', taskId);
+    const { error } = await supabase.from('tasks').update(updates).eq('id', taskId);
+    if (!error && updates.is_completed) {
+      cleanupOldCompletedTasks(updatedTasks);
+    }
   };
 
   if (isLoading) {
@@ -597,7 +617,7 @@ export const ProjectsModule: React.FC = () => {
                 .sort((a, b) => {
                   if (a.is_completed && !b.is_completed) return 1;
                   if (!a.is_completed && b.is_completed) return -1;
-                  return 0;
+                  return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
                 })
                 .map(task => {
                 const project = projects.find(p => p.id === task.project_id);
