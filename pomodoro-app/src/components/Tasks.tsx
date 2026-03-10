@@ -23,6 +23,7 @@ interface Task {
     projectId?: string;
     scheduledDate?: string;
     dueDate?: string;
+    completedAt?: string | null;
 }
 
 interface TaskFormProps {
@@ -526,7 +527,8 @@ export const Tasks: React.FC = () => {
                     projectId: t.project_id,
                     scheduledDate: t.scheduled_date || '',
                     dueDate: t.due_date || '',
-                    createdAt: t.created_at
+                    createdAt: t.created_at,
+                    completedAt: t.completed_at || null
                 }));
                 setTasks(fetchedTasks as any);
                 cleanupOldCompletedTasks(fetchedTasks);
@@ -675,7 +677,8 @@ export const Tasks: React.FC = () => {
                     estPomodoros: data.est_pomodoros,
                     projectId: data.project_id,
                     scheduledDate: data.scheduled_date || '',
-                    dueDate: data.due_date || ''
+                    dueDate: data.due_date,
+                    completedAt: data.completed_at || null // Add completedAt here, assuming it's returned by update
                 } : t
             ));
             setEditingTaskId(null);
@@ -701,15 +704,21 @@ export const Tasks: React.FC = () => {
         
         const newStatus = !task.isCompleted;
         
+        const nowStr = new Date().toISOString();
+        const completedAtValue = newStatus ? nowStr : null;
+
         // Optimistic UI Update
-        const updatedTasks = tasks.map(t => t.id === task.id ? { ...t, isCompleted: newStatus } : t);
+        const updatedTasks = tasks.map(t => t.id === task.id ? { ...t, isCompleted: newStatus, completedAt: completedAtValue } : t);
         setTasks(updatedTasks);
         if (newStatus && activeTaskId === task.id) {
             const nextActiveId = tasks.find(t => t.id !== task.id && !t.isCompleted)?.id;
             setActiveTaskId(nextActiveId || null);
         }
 
-        const { error } = await supabase.from('tasks').update({ is_completed: newStatus }).eq('id', task.id);
+        const { error } = await supabase.from('tasks').update({ 
+            is_completed: newStatus,
+            completed_at: completedAtValue
+        }).eq('id', task.id);
         
         if (error) {
             // Revert changes on error
@@ -811,7 +820,12 @@ export const Tasks: React.FC = () => {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
                 {(() => {
                     const uncompletedTasks = tasks.filter(t => !t.isCompleted);
-                    const completedTasks = tasks.filter(t => t.isCompleted);
+                    const completedTasks = tasks.filter(t => t.isCompleted).sort((a, b) => {
+                        // Sort completed tasks descending (newest timestamp at the very top of the checked section)
+                        const timeA = a.completedAt ? new Date(a.completedAt).getTime() : 0;
+                        const timeB = b.completedAt ? new Date(b.completedAt).getTime() : 0;
+                        return timeB - timeA;
+                    });
                     const sortedTasks = [...uncompletedTasks, ...completedTasks];
 
                     return sortedTasks.map((task) => {
