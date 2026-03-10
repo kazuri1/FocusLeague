@@ -210,3 +210,65 @@ select.form-input option { background: #222; color: #fff; }
 .kanban-task-title { font-weight: 600; font-size: 1rem; margin-bottom: 0.5rem; color: #fff; }
 .kanban-task-project { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 12px; font-size: 0.75rem; font-weight: 700; color: #444; margin-bottom: 0.8rem; width: 120px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .kanban-task-meta { display: flex; justify-content: space-between; font-size: 0.8rem; color: #999; }
+
+/* Analytics Additions */
+.analytics-grid-4 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+.analytics-card {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 1rem;
+    padding: 1.5rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column;
+}
+.analytics-card-title {
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.6);
+    margin-bottom: 0.75rem;
+    margin-top: 0;
+}
+.analytics-card-value {
+    font-size: 2rem;
+    font-weight: 800;
+    color: #ffffff;
+    margin: 0;
+    font-family: monospace;
+    letter-spacing: -0.02em;
+}
+.analytics-card-unit {
+    font-size: 1.25rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.5);
+    margin-left: 0.25rem;
+}
+.analytics-card-trend {
+    font-size: 0.85rem;
+    margin-top: 0.75rem;
+    font-weight: 500;
+    margin-bottom: 0;
+}
+.trend-up { color: #34d399; } /* Emerald */
+.trend-down { color: #f87171; } /* Red */
+.trend-neutral { color: rgba(255, 255, 255, 0.4); }
+
+.analytics-chart-container {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 1rem;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+.analytics-chart-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin-bottom: 1.5rem;
+    margin-top: 0;
+    color: #ffffff;
+}

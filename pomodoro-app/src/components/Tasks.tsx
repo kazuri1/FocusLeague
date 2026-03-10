@@ -41,7 +41,7 @@ interface TaskFormProps {
 }
 
 const generateRandomColor = () => {
-    const colors = ['#e1f5fe', '#e8f5e9', '#fff3e0', '#fce4ec', '#f3e5f5', '#e0f7fa', '#e8eaf6'];
+    const colors = ['#93c5fd', '#6ee7b7', '#fcd34d', '#fca5a5', '#c4b5fd', '#f9a8d4', '#5eead4', '#fdba74'];
     return colors[Math.floor(Math.random() * colors.length)];
 };
 

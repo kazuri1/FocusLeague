@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { supabase } from './lib/supabase';
 import './App.css';
 import './modules.css';
 import { ModeSelector } from './components/ModeSelector';
@@ -125,6 +126,23 @@ function AppContent() {
           // Dispatch event for Tasks.tsx to increment the active task
           window.dispatchEvent(new CustomEvent('pomodoroCompleted'));
           
+          // Record the completed session for Analytics directly into Supabase
+          try {
+              const activeTaskId = localStorage.getItem('fl_activeTaskId');
+              if (activeTaskId && activeTaskId !== 'null' && activeTaskId !== 'undefined') {
+                  supabase.from('pomodoro_sessions').insert([{
+                      task_id: activeTaskId,
+                      type: 'focus',
+                      duration: settings.pomodoro * 60,
+                      completed: true
+                  }]).then(({ error }: any) => {
+                     if (error) console.error("Supabase session insert error:", error);
+                  });
+              }
+          } catch (e) {
+              console.error("Failed to save session to analytics cloud", e);
+          }
+          
           const newCount = pomodorosCompleted + 1;
           if (newCount >= settings.longBreakInterval) {
               nextMode = 'long break';
@@ -153,8 +171,10 @@ function AppContent() {
 
   const togglePlay = () => {
     const activeTaskId = localStorage.getItem('fl_activeTaskId');
-    if (!activeTaskId && mode === 'pomodoro') {
-      alert('Please select a task before starting a pomorodo session');
+    const hasActiveTask = activeTaskId && activeTaskId !== 'null' && activeTaskId !== 'undefined' && activeTaskId.trim() !== '';
+
+    if (!hasActiveTask && mode === 'pomodoro' && !isPlaying) {
+      window.alert('Please select a task before starting a pomodoro session');
       return;
     }
     setIsPlaying(!isPlaying);

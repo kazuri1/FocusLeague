@@ -5,13 +5,8 @@ import { TaskForm } from '../../components/Tasks';
 import { X } from 'lucide-react';
 
 const PROJECT_COLORS = [
-  '#e1f5fe', // light blue
-  '#e8f5e9', // light green
-  '#fff3e0', // light orange
-  '#fce4ec', // light pink
-  '#f3e5f5', // light purple
-  '#e0f7fa', // teal
-  '#e8eaf6', // indigo
+  '#93c5fd', '#6ee7b7', '#fcd34d', '#fca5a5', 
+  '#c4b5fd', '#f9a8d4', '#5eead4', '#fdba74'
 ];
 
 export const ProjectsModule: React.FC = () => {
