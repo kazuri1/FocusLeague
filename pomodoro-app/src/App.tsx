@@ -46,6 +46,7 @@ async function pushTimerState(
   pomodorosCompleted: number,
   activeTaskId: string | null
 ) {
+  // RLS ensures we only update our own row
   await supabase.from('timer_state').update({
     mode,
     is_playing: isPlaying,
@@ -53,7 +54,7 @@ async function pushTimerState(
     last_updated: new Date().toISOString(),
     pomodoros_completed: pomodorosCompleted,
     active_task_id: activeTaskId || null,
-  }).eq('id', 1);
+  }).not('id', 'is', null);
 }
 
 function AppContent() {
@@ -90,11 +91,24 @@ function AppContent() {
       const { data, error } = await supabase
         .from('timer_state')
         .select('*')
-        .eq('id', 1)
-        .single();
+        .maybeSingle();
 
-      if (error || !data) {
+      if (error) {
         console.error('Failed to load timer state from Supabase:', error);
+        setIsLoaded(true);
+        return;
+      }
+
+      // No row exists for this user — create one
+      if (!data) {
+        const defaultTimeLeft = getModeTimeSeconds('pomodoro', settings);
+        await supabase.from('timer_state').insert([{
+          mode: 'pomodoro',
+          is_playing: false,
+          time_left: defaultTimeLeft,
+          last_updated: new Date().toISOString(),
+          pomodoros_completed: 0,
+        }]);
         setIsLoaded(true);
         return;
       }
@@ -134,7 +148,7 @@ function AppContent() {
       .channel('timer-sync')
       .on(
         'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'timer_state', filter: 'id=eq.1' },
+        { event: 'UPDATE', schema: 'public', table: 'timer_state' },
         (payload) => {
           // If we sent this update ourselves, ignore the echo
           if (localPushInFlight.current) return;
