@@ -14,6 +14,8 @@ import { AppProvider } from './entities/store';
 import { ProjectsModule } from './modules/projects/ProjectsModule';
 import { AnalyticsModule } from './modules/analytics/AnalyticsModule';
 import { NotificationBell } from './components/NotificationBell';
+import { AuthProvider, useAuth } from './hooks/useAuth';
+import { LogIn, LogOut } from 'lucide-react';
 
 /* eslint-disable react-hooks/set-state-in-effect */
 
@@ -332,6 +334,7 @@ function AppContent() {
       <div className="background-overlay"></div>
 
       <img src="/logo.png" alt="FocusLeague" className="app-logo" style={{ top: isMobile ? '3rem' : '1.5rem', height: isMobile ? '48px' : '72px' }} />
+      <HeaderAuth />
       <NotificationBell />
 
       {/* Top Center Tab Toggle */}
@@ -398,11 +401,150 @@ function AppContent() {
   );
 }
 
+function HeaderAuth() {
+  const { user, signInWithGoogle, signOut } = useAuth();
+  const isMobile = useMobile();
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (isOpen && dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen]);
+
+  const avatar = user?.user_metadata?.avatar_url;
+  const name = user?.user_metadata?.full_name || user?.email;
+
+  return (
+    <div ref={dropdownRef} style={{
+      position: 'absolute',
+      top: isMobile ? '3.5rem' : '2.5rem',
+      right: isMobile ? '4.5rem' : '6rem',
+      zIndex: 100,
+    }}>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        style={{
+          background: 'rgba(0, 0, 0, 0.4)',
+          border: '1px solid rgba(255, 255, 255, 0.2)',
+          borderRadius: '50%',
+          width: '45px',
+          height: '45px',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          cursor: 'pointer',
+          backdropFilter: 'blur(8px)',
+          transition: 'all 0.2s',
+          padding: 0,
+          overflow: 'hidden',
+          color: '#fff'
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(0,0,0,0.6)'; e.currentTarget.style.transform = 'scale(1.05)'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(0,0,0,0.4)'; e.currentTarget.style.transform = 'scale(1)'; }}
+      >
+        {user && avatar ? (
+          <img src={avatar} alt="" style={{ width: '100%', height: '100%', borderRadius: '50%' }} />
+        ) : (
+          <LogIn size={20} />
+        )}
+      </button>
+
+      {isOpen && (
+        <div style={{
+          position: 'absolute',
+          top: '55px',
+          right: '0',
+          width: '280px',
+          background: '#fff',
+          borderRadius: '16px',
+          boxShadow: '0 10px 40px rgba(0,0,0,0.15)',
+          overflow: 'hidden',
+          animation: 'fadeIn 0.2s ease-out',
+          color: '#333'
+        }}>
+          {user ? (
+            <>
+              <div style={{
+                padding: '1rem',
+                borderBottom: '1px solid #eee',
+                background: '#fafafa',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.75rem'
+              }}>
+                {avatar && <img src={avatar} alt="" style={{ width: '36px', height: '36px', borderRadius: '50%' }} />}
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: '0.95rem', color: '#333' }}>{name}</div>
+                  {user.email && <div style={{ fontSize: '0.8rem', color: '#888' }}>{user.email}</div>}
+                </div>
+              </div>
+              <button
+                onClick={() => { signOut(); setIsOpen(false); }}
+                style={{
+                  width: '100%',
+                  padding: '0.85rem 1rem',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.6rem',
+                  fontSize: '0.9rem',
+                  fontWeight: 500,
+                  color: '#555',
+                  fontFamily: '"Space Grotesk", sans-serif',
+                  transition: 'background 0.2s'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f5f5f5'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+              >
+                <LogOut size={18} /> Sign out
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => { signInWithGoogle(); setIsOpen(false); }}
+              style={{
+                width: '100%',
+                padding: '1rem',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.75rem',
+                fontSize: '0.95rem',
+                fontWeight: 600,
+                color: '#333',
+                fontFamily: '"Space Grotesk", sans-serif',
+                transition: 'background 0.2s'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f5f5f5'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+              <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+              Sign in with Google
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function App() {
   return (
-    <AppProvider>
-      <AppContent />
-    </AppProvider>
+    <AuthProvider>
+      <AppProvider>
+        <AppContent />
+      </AppProvider>
+    </AuthProvider>
   );
 }
 
