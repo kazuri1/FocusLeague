@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from './lib/supabase';
 import './App.css';
 import './modules.css';
@@ -20,11 +20,11 @@ import { NotificationBell } from './components/NotificationBell';
 type Mode = 'pomodoro' | 'short break' | 'long break';
 
 const NATURE_IMAGES = [
-  "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?q=80&w=2560&auto=format&fit=crop", // Forest path
-  "https://images.unsplash.com/photo-1472214103451-9374bd1c798e?q=80&w=2560&auto=format&fit=crop", // Mountains
-  "https://images.unsplash.com/photo-1469474968028-56623f02e42e?q=80&w=2560&auto=format&fit=crop", // Nature landscape
-  "https://images.unsplash.com/photo-1501854140801-50d01698950b?q=80&w=2560&auto=format&fit=crop", // Calm lake
-  "https://images.unsplash.com/photo-1433086966358-54859d0ed716?q=80&w=2560&auto=format&fit=crop"  // Waterfall
+  "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?q=80&w=2560&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1472214103451-9374bd1c798e?q=80&w=2560&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1469474968028-56623f02e42e?q=80&w=2560&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1501854140801-50d01698950b?q=80&w=2560&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1433086966358-54859d0ed716?q=80&w=2560&auto=format&fit=crop"
 ];
 
 const defaultSettings: TimerSettings = {
@@ -36,10 +36,25 @@ const defaultSettings: TimerSettings = {
   longBreakInterval: 4,
 };
 
+// Helper: push the full timer state to Supabase
+async function pushTimerState(
+  mode: Mode,
+  isPlaying: boolean,
+  timeLeft: number,
+  pomodorosCompleted: number,
+  activeTaskId: string | null
+) {
+  await supabase.from('timer_state').update({
+    mode,
+    is_playing: isPlaying,
+    time_left: timeLeft,
+    last_updated: new Date().toISOString(),
+    pomodoros_completed: pomodorosCompleted,
+    active_task_id: activeTaskId || null,
+  }).eq('id', 1);
+}
+
 function AppContent() {
-  const [mode, setMode] = useState<Mode>(() => {
-    return (localStorage.getItem('pomodoro_app_mode') as Mode) || 'pomodoro';
-  });
   const [settings, setSettings] = useState<TimerSettings>(() => {
     const saved = localStorage.getItem('pomodoro_app_settings');
     return saved ? JSON.parse(saved) : defaultSettings;
@@ -49,47 +64,109 @@ function AppContent() {
   const isMobile = useMobile();
   const [currentTab, setCurrentTab] = useState<'focus' | 'tasks' | 'analytics'>('focus');
 
+  // Timer state — initialized empty, populated from Supabase
+  const [mode, setMode] = useState<Mode>('pomodoro');
+  const [timeLeft, setTimeLeft] = useState<number>(defaultSettings.pomodoro * 60);
+  const [isPlaying, setIsPlaying] = useState<boolean>(false);
+  const [pomodorosCompleted, setPomodorosCompleted] = useState<number>(0);
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  // Ref to prevent the tick useEffect from re-pushing state during remote updates
+  const suppressPushRef = useRef(false);
+  // Ref to track if we are the originator of a push (to avoid echo loops)
+  const localPushInFlight = useRef(false);
+
   const getModeTimeSeconds = (currentMode: Mode, currentSettings: TimerSettings) => {
     if (currentMode === 'pomodoro') return currentSettings.pomodoro * 60;
     if (currentMode === 'short break') return currentSettings.shortBreak * 60;
     return currentSettings.longBreak * 60;
   };
 
-  const [timeLeft, setTimeLeft] = useState<number>(() => {
-    const saved = localStorage.getItem('pomodoro_app_timeLeft');
-    const lastTick = localStorage.getItem('pomodoro_app_lastTick');
-    const isRun = localStorage.getItem('pomodoro_app_isPlaying') === 'true';
-    if (saved) {
-      const parsedTime = parseInt(saved, 10);
-      if (isRun && lastTick) {
-        const elapsed = Math.floor((Date.now() - parseInt(lastTick, 10)) / 1000);
-        return Math.max(0, parsedTime - elapsed);
-      }
-      return parsedTime;
-    }
-    const currentMode = (localStorage.getItem('pomodoro_app_mode') as Mode) || 'pomodoro';
-    const currentSettingsStr = localStorage.getItem('pomodoro_app_settings');
-    const currentSettings = currentSettingsStr ? JSON.parse(currentSettingsStr) : defaultSettings;
-    return getModeTimeSeconds(currentMode, currentSettings);
-  });
-  const [isPlaying, setIsPlaying] = useState<boolean>(() => localStorage.getItem('pomodoro_app_isPlaying') === 'true');
-  const [pomodorosCompleted, setPomodorosCompleted] = useState<number>(() => {
-    const saved = localStorage.getItem('pomodoro_app_completedCount');
-    return saved ? parseInt(saved, 10) : 0;
-  });
-
+  // ── 1. Load initial state from Supabase ──────────────────────────────────
   useEffect(() => {
-    localStorage.setItem('pomodoro_app_mode', mode);
-    localStorage.setItem('pomodoro_app_settings', JSON.stringify(settings));
-    localStorage.setItem('pomodoro_app_timeLeft', timeLeft.toString());
-    localStorage.setItem('pomodoro_app_lastTick', Date.now().toString());
-    localStorage.setItem('pomodoro_app_isPlaying', isPlaying.toString());
-    localStorage.setItem('pomodoro_app_completedCount', pomodorosCompleted.toString());
-  }, [mode, settings, timeLeft, isPlaying, pomodorosCompleted]);
+    const loadState = async () => {
+      const { data, error } = await supabase
+        .from('timer_state')
+        .select('*')
+        .eq('id', 1)
+        .single();
 
+      if (error || !data) {
+        console.error('Failed to load timer state from Supabase:', error);
+        setIsLoaded(true);
+        return;
+      }
+
+      const remoteMode = data.mode as Mode;
+      const remotePlaying = data.is_playing as boolean;
+      const remoteTimeLeft = data.time_left as number;
+      const remoteLastUpdated = new Date(data.last_updated).getTime();
+      const remotePomosCompleted = data.pomodoros_completed as number;
+
+      // Apply time-offset: if the timer was running when we opened the page,
+      // fast-forward by the elapsed seconds since last_updated.
+      let computedTimeLeft = remoteTimeLeft;
+      if (remotePlaying) {
+        const elapsedSeconds = Math.floor((Date.now() - remoteLastUpdated) / 1000);
+        computedTimeLeft = Math.max(0, remoteTimeLeft - elapsedSeconds);
+      }
+
+      suppressPushRef.current = true;
+      setMode(remoteMode);
+      setTimeLeft(computedTimeLeft);
+      setIsPlaying(remotePlaying);
+      setPomodorosCompleted(remotePomosCompleted);
+      setIsLoaded(true);
+      // Brief delay to let re-renders settle before re-enabling push
+      setTimeout(() => { suppressPushRef.current = false; }, 200);
+    };
+
+    loadState();
+  }, []);
+
+  // ── 2. Supabase Realtime subscription ────────────────────────────────────
+  useEffect(() => {
+    if (!isLoaded) return;
+
+    const channel = supabase
+      .channel('timer-sync')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'timer_state', filter: 'id=eq.1' },
+        (payload) => {
+          // If we sent this update ourselves, ignore the echo
+          if (localPushInFlight.current) return;
+
+          const d = payload.new as any;
+          const remoteMode = d.mode as Mode;
+          const remotePlaying = d.is_playing as boolean;
+          const remoteTimeLeft = d.time_left as number;
+          const remoteLastUpdated = new Date(d.last_updated).getTime();
+          const remotePomosCompleted = d.pomodoros_completed as number;
+
+          let computedTimeLeft = remoteTimeLeft;
+          if (remotePlaying) {
+            const elapsed = Math.floor((Date.now() - remoteLastUpdated) / 1000);
+            computedTimeLeft = Math.max(0, remoteTimeLeft - elapsed);
+          }
+
+          suppressPushRef.current = true;
+          setMode(remoteMode);
+          setTimeLeft(computedTimeLeft);
+          setIsPlaying(remotePlaying);
+          setPomodorosCompleted(remotePomosCompleted);
+          setTimeout(() => { suppressPushRef.current = false; }, 200);
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [isLoaded]);
+
+  // ── 3. Tick the local timer every second ─────────────────────────────────
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
-    if (isPlaying) {
+    if (isPlaying && isLoaded) {
       interval = setInterval(() => {
         setTimeLeft((prev) => {
           if (prev <= 0) return 0;
@@ -98,75 +175,100 @@ function AppContent() {
       }, 1000);
     }
     return () => clearInterval(interval);
-  }, [isPlaying]);
+  }, [isPlaying, isLoaded]);
 
+  // ── 4. Persist settings to localStorage ──────────────────────────────────
   useEffect(() => {
-    // Change background image every 30 seconds
+    localStorage.setItem('pomodoro_app_settings', JSON.stringify(settings));
+  }, [settings]);
+
+  // ── 5. Rotate background images ──────────────────────────────────────────
+  useEffect(() => {
     const bgInterval = setInterval(() => {
-        setCurrentImageIndex((prev) => (prev + 1) % NATURE_IMAGES.length);
+      setCurrentImageIndex((prev) => (prev + 1) % NATURE_IMAGES.length);
     }, 30000);
     return () => clearInterval(bgInterval);
   }, []);
 
+  // ── 6. Handle timer completion ────────────────────────────────────────────
   useEffect(() => {
+    if (!isLoaded) return;
     if (isPlaying && timeLeft === 0) {
       const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
       audio.loop = true;
       audio.play().catch(e => console.error("Error playing sound:", e));
-      
-      setTimeout(() => {
-          audio.pause();
-          audio.currentTime = 0;
-      }, 5000);
+      setTimeout(() => { audio.pause(); audio.currentTime = 0; }, 5000);
 
       let nextMode: Mode = 'pomodoro';
       let nextPlaying = false;
+      let nextPomos = pomodorosCompleted;
 
       if (mode === 'pomodoro') {
-          // Dispatch event for Tasks.tsx to increment the active task
-          window.dispatchEvent(new CustomEvent('pomodoroCompleted'));
-          
-          // Record the completed session for Analytics directly into Supabase
-          try {
-              const activeTaskId = localStorage.getItem('fl_activeTaskId');
-              if (activeTaskId && activeTaskId !== 'null' && activeTaskId !== 'undefined') {
-                  supabase.from('pomodoro_sessions').insert([{
-                      task_id: activeTaskId,
-                      type: 'focus',
-                      duration: settings.pomodoro * 60,
-                      completed: true
-                  }]).then(({ error }: any) => {
-                     if (error) console.error("Supabase session insert error:", error);
-                  });
-              }
-          } catch (e) {
-              console.error("Failed to save session to analytics cloud", e);
+        window.dispatchEvent(new CustomEvent('pomodoroCompleted'));
+
+        try {
+          const activeTaskId = localStorage.getItem('fl_activeTaskId');
+          if (activeTaskId && activeTaskId !== 'null' && activeTaskId !== 'undefined') {
+            supabase.from('pomodoro_sessions').insert([{
+              task_id: activeTaskId,
+              type: 'focus',
+              duration: settings.pomodoro * 60,
+              completed: true
+            }]).then(({ error }: any) => {
+              if (error) console.error("Supabase session insert error:", error);
+            });
           }
-          
-          const newCount = pomodorosCompleted + 1;
-          if (newCount >= settings.longBreakInterval) {
-              nextMode = 'long break';
-              setPomodorosCompleted(0);
-          } else {
-              nextMode = 'short break';
-              setPomodorosCompleted(newCount);
-          }
-          nextPlaying = settings.autoStartBreaks;
+        } catch (e) {
+          console.error("Failed to save session to analytics cloud", e);
+        }
+
+        const newCount = pomodorosCompleted + 1;
+        if (newCount >= settings.longBreakInterval) {
+          nextMode = 'long break';
+          nextPomos = 0;
+        } else {
+          nextMode = 'short break';
+          nextPomos = newCount;
+        }
+        nextPlaying = settings.autoStartBreaks;
       } else {
-          nextMode = 'pomodoro';
-          nextPlaying = settings.autoStartPomodoros;
+        nextMode = 'pomodoro';
+        nextPlaying = settings.autoStartPomodoros;
       }
 
-      setMode(nextMode);
-      setTimeLeft(getModeTimeSeconds(nextMode, settings));
-      setIsPlaying(nextPlaying);
-    }
-  }, [timeLeft, isPlaying, mode, settings, pomodorosCompleted]);
+      const nextTimeLeft = getModeTimeSeconds(nextMode, settings);
+      const activeTaskId = localStorage.getItem('fl_activeTaskId');
 
+      setMode(nextMode);
+      setTimeLeft(nextTimeLeft);
+      setIsPlaying(nextPlaying);
+      setPomodorosCompleted(nextPomos);
+
+      // Push final state to cloud
+      localPushInFlight.current = true;
+      pushTimerState(nextMode, nextPlaying, nextTimeLeft, nextPomos, activeTaskId).finally(() => {
+        setTimeout(() => { localPushInFlight.current = false; }, 300);
+      });
+    }
+  }, [timeLeft, isPlaying, mode, settings, pomodorosCompleted, isLoaded]);
+
+  // ── 7. Update document title ──────────────────────────────────────────────
+  useEffect(() => {
+    document.title = `${formatTime(timeLeft)} - FocusLeague`;
+  }, [timeLeft]);
+
+  // ── Interaction handlers ─────────────────────────────────────────────────
   const handleModeChange = (newMode: Mode) => {
+    const newTimeLeft = getModeTimeSeconds(newMode, settings);
+    const activeTaskId = localStorage.getItem('fl_activeTaskId');
     setMode(newMode);
-    setTimeLeft(getModeTimeSeconds(newMode, settings));
+    setTimeLeft(newTimeLeft);
     setIsPlaying(false);
+
+    localPushInFlight.current = true;
+    pushTimerState(newMode, false, newTimeLeft, pomodorosCompleted, activeTaskId).finally(() => {
+      setTimeout(() => { localPushInFlight.current = false; }, 300);
+    });
   };
 
   const togglePlay = () => {
@@ -177,18 +279,33 @@ function AppContent() {
       window.alert('Please select a task before starting a pomodoro session');
       return;
     }
-    setIsPlaying(!isPlaying);
+
+    const newPlaying = !isPlaying;
+    setIsPlaying(newPlaying);
+
+    localPushInFlight.current = true;
+    pushTimerState(mode, newPlaying, timeLeft, pomodorosCompleted, activeTaskId).finally(() => {
+      setTimeout(() => { localPushInFlight.current = false; }, 300);
+    });
   };
 
   const handleReset = () => {
+    const newTimeLeft = getModeTimeSeconds(mode, settings);
+    const activeTaskId = localStorage.getItem('fl_activeTaskId');
     setIsPlaying(false);
-    setTimeLeft(getModeTimeSeconds(mode, settings));
+    setTimeLeft(newTimeLeft);
+
+    localPushInFlight.current = true;
+    pushTimerState(mode, false, newTimeLeft, pomodorosCompleted, activeTaskId).finally(() => {
+      setTimeout(() => { localPushInFlight.current = false; }, 300);
+    });
   };
 
   const handleSettingsChange = (newSettings: TimerSettings) => {
     setSettings(newSettings);
     if (!isPlaying) {
-      setTimeLeft(getModeTimeSeconds(mode, newSettings));
+      const newTimeLeft = getModeTimeSeconds(mode, newSettings);
+      setTimeLeft(newTimeLeft);
     }
   };
 
@@ -198,17 +315,13 @@ function AppContent() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  useEffect(() => {
-    document.title = `${formatTime(timeLeft)} - FocusLeague`;
-  }, [timeLeft]);
-
   return (
     <div className="app-container" style={{ paddingLeft: isMobile ? '1rem' : '0', paddingRight: isMobile ? '1rem' : '0' }}>
       {NATURE_IMAGES.map((imgUrl, index) => (
-        <div 
+        <div
           key={imgUrl}
-          className="background-image" 
-          style={{ 
+          className="background-image"
+          style={{
             backgroundImage: `url(${imgUrl})`,
             opacity: index === currentImageIndex ? 1 : 0,
             transition: 'opacity 1.5s ease-in-out',
@@ -217,10 +330,10 @@ function AppContent() {
         ></div>
       ))}
       <div className="background-overlay"></div>
-      
+
       <img src="/logo.png" alt="FocusLeague" className="app-logo" style={{ top: isMobile ? '3rem' : '1.5rem', height: isMobile ? '48px' : '72px' }} />
       <NotificationBell />
-      
+
       {/* Top Center Tab Toggle */}
       <div style={{
           position: 'absolute',
@@ -235,55 +348,13 @@ function AppContent() {
           zIndex: 50,
           backdropFilter: 'blur(4px)'
       }}>
-          <button
-              onClick={() => setCurrentTab('focus')}
-              style={{
-                  background: currentTab === 'focus' ? '#ffffff' : 'transparent',
-                  color: currentTab === 'focus' ? '#000000' : '#ffffff',
-                  border: 'none',
-                  borderRadius: '20px',
-                  padding: '0.5rem 1.5rem',
-                  fontWeight: 600,
-                  fontSize: '0.95rem',
-                  fontFamily: '"Space Grotesk", sans-serif',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease'
-              }}
-          >
+          <button onClick={() => setCurrentTab('focus')} style={{ background: currentTab === 'focus' ? '#ffffff' : 'transparent', color: currentTab === 'focus' ? '#000000' : '#ffffff', border: 'none', borderRadius: '20px', padding: '0.5rem 1.5rem', fontWeight: 600, fontSize: '0.95rem', fontFamily: '"Space Grotesk", sans-serif', cursor: 'pointer', transition: 'all 0.2s ease' }}>
               Focus
           </button>
-          <button
-              onClick={() => setCurrentTab('tasks')}
-              style={{
-                  background: currentTab === 'tasks' ? '#ffffff' : 'transparent',
-                  color: currentTab === 'tasks' ? '#000000' : '#ffffff',
-                  border: 'none',
-                  borderRadius: '20px',
-                  padding: '0.5rem 1.5rem',
-                  fontWeight: 600,
-                  fontSize: '0.95rem',
-                  fontFamily: '"Space Grotesk", sans-serif',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease'
-              }}
-          >
+          <button onClick={() => setCurrentTab('tasks')} style={{ background: currentTab === 'tasks' ? '#ffffff' : 'transparent', color: currentTab === 'tasks' ? '#000000' : '#ffffff', border: 'none', borderRadius: '20px', padding: '0.5rem 1.5rem', fontWeight: 600, fontSize: '0.95rem', fontFamily: '"Space Grotesk", sans-serif', cursor: 'pointer', transition: 'all 0.2s ease' }}>
               Projects
           </button>
-          <button
-              onClick={() => setCurrentTab('analytics')}
-              style={{
-                  background: currentTab === 'analytics' ? '#ffffff' : 'transparent',
-                  color: currentTab === 'analytics' ? '#000000' : '#ffffff',
-                  border: 'none',
-                  borderRadius: '20px',
-                  padding: '0.5rem 1.5rem',
-                  fontWeight: 600,
-                  fontSize: '0.95rem',
-                  fontFamily: '"Space Grotesk", sans-serif',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease'
-              }}
-          >
+          <button onClick={() => setCurrentTab('analytics')} style={{ background: currentTab === 'analytics' ? '#ffffff' : 'transparent', color: currentTab === 'analytics' ? '#000000' : '#ffffff', border: 'none', borderRadius: '20px', padding: '0.5rem 1.5rem', fontWeight: 600, fontSize: '0.95rem', fontFamily: '"Space Grotesk", sans-serif', cursor: 'pointer', transition: 'all 0.2s ease' }}>
               Analytics
           </button>
       </div>
@@ -316,12 +387,12 @@ function AppContent() {
           </div>
         )}
       </div>
-      
-      <SettingsModal 
-        isOpen={isSettingsOpen} 
-        onClose={() => setIsSettingsOpen(false)} 
-        settings={settings} 
-        onSettingsChange={handleSettingsChange} 
+
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        settings={settings}
+        onSettingsChange={handleSettingsChange}
       />
     </div>
   );
